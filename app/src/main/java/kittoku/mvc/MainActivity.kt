@@ -16,7 +16,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        title = "${getText(R.string.app_name)}: ${BuildConfig.VERSION_NAME}"
+        title = "${getText(R.string.app_name_short)}: ${BuildConfig.VERSION_NAME}"
 
 
         object : FragmentStateAdapter(this) {
