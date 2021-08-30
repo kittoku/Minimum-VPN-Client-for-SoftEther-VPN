@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="SSL Layer">
+        <kittoku.mvc.preference.custom.SslPortPreference android:key="SSL_PORT"/>
+        <kittoku.mvc.preference.custom.SslVersionPreference android:key="SSL_VERSION"/>
+        <kittoku.mvc.preference.custom.SslDoSelectSuitesPreference android:key="SSL_DO_SELECT_SUITES"/>
+        <kittoku.mvc.preference.custom.SslSuitesPreference android:key="SSL_SUITES"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory android:title="Ethernet Layer">
+        <kittoku.mvc.preference.custom.MacAddressPreference android:key="MAC_ADDRESS"/>
+    </PreferenceCategory>
+</PreferenceScreen>

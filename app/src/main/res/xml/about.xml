@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory>
+        <kittoku.mvc.preference.custom.AboutProjectPreference android:key="ABOUT_PROJECT"/>
+    </PreferenceCategory>
+
+    <PreferenceCategory>
+        <kittoku.mvc.preference.custom.AboutLinkMvc android:key="ABOUT_LINK_MVC"/>
+        <kittoku.mvc.preference.custom.AboutLinkSoftEther android:key="ABOUT_LINK_SOFTETHER"/>
+    </PreferenceCategory>
+</PreferenceScreen>

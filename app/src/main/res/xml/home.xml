@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <kittoku.mvc.preference.custom.HomeHostnamePreference android:key="HOME_HOSTNAME"/>
+    <kittoku.mvc.preference.custom.HomeUsernamePreference android:key="HOME_USERNAME"/>
+    <kittoku.mvc.preference.custom.HomePasswordPreference android:key="HOME_PASSWORD"/>
+    <kittoku.mvc.preference.custom.HomeConnectorPreference android:key="HOME_CONNECTOR"/>
+</PreferenceScreen>
