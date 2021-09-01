@@ -37,6 +37,12 @@ internal abstract class SummaryOnlyPreference(context: Context, attrs: Attribute
         sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
     }
 
+    override fun onDetached() {
+        super.onDetached()
+
+        sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+    }
+
     override fun onBindViewHolder(holder: PreferenceViewHolder?) {
         super.onBindViewHolder(holder)
 
