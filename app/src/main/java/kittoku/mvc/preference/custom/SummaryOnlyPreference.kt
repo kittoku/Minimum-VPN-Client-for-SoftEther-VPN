@@ -5,7 +5,6 @@ import android.content.SharedPreferences
 import android.util.AttributeSet
 import android.widget.TextView
 import androidx.preference.Preference
-import androidx.preference.Preference.SummaryProvider
 import androidx.preference.PreferenceViewHolder
 import kittoku.mvc.extension.nextBytes
 import kittoku.mvc.extension.toHexString
@@ -20,19 +19,22 @@ internal abstract class SummaryOnlyPreference(context: Context, attrs: Attribute
     abstract val preferenceTitle: String
     protected open val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == mvcPreference.name) {
-            summaryProvider?.provideSummary(this)
+            updateSummary()
         }
     }
 
-    protected open val provider = SummaryProvider<Preference> {
-        getStringPrefValue(mvcPreference, it.sharedPreferences)
+    protected open val summaryValue: String
+        get() = getStringPrefValue(mvcPreference, sharedPreferences)
+
+    private fun updateSummary() {
+        summary = summaryValue
     }
 
     override fun onAttached() {
         super.onAttached()
 
         title = preferenceTitle
-        summaryProvider = provider
+        updateSummary()
 
         sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
     }
@@ -56,9 +58,8 @@ internal abstract class SummaryOnlyPreference(context: Context, attrs: Attribute
 internal class MacAddressPreference(context: Context, attrs: AttributeSet) : SummaryOnlyPreference(context, attrs) {
     override val mvcPreference = MvcPreference.MAC_ADDRESS
     override val preferenceTitle = "MAC Address"
-    override val provider = SummaryProvider<Preference> {
-        getStringPrefValue(mvcPreference, it.sharedPreferences).chunked(2).joinToString(":")
-    }
+    override val summaryValue: String
+        get() = getStringPrefValue(mvcPreference, sharedPreferences).chunked(2).joinToString(":")
 
     override fun onAttached() {
         super.onAttached()
@@ -77,18 +78,31 @@ internal class MacAddressPreference(context: Context, attrs: AttributeSet) : Sum
 internal class AboutProjectPreference(context: Context, attrs: AttributeSet) : SummaryOnlyPreference(context, attrs) {
     override val mvcPreference = MvcPreference.ABOUT_PROJECT
     override val preferenceTitle = "About This App"
-    override val provider = SummaryProvider<Preference> {
-        listOf(
-            "This is an unofficial open-source SoftEther-VPN-protocol-based VPN client." ,
-            "This app includes part of SoftEtherVPN source code which is under Apache License 2.0.",
-            """"SoftEther" is a registered trademark of SoftEther Corporation.""",
-            "If you need more information, please move to each project page from the following links.",
-        ).joinToString("\n\n")
-    }
+    override val summaryValue = listOf(
+        "This is an unofficial open-source SoftEther-VPN-protocol-based VPN client." ,
+        "This app includes part of SoftEtherVPN source code which is under Apache License 2.0.",
+        """"SoftEther" is a registered trademark of SoftEther Corporation.""",
+        "If you need more information, please move to each project page from the following links.",
+    ).joinToString("\n\n")
 
     override fun onAttached() {
         super.onAttached()
 
         isIconSpaceReserved = false
     }
+}
+
+internal class HomeStatusPreference(context: Context, attrs: AttributeSet) : SummaryOnlyPreference(context, attrs) {
+    override val mvcPreference = MvcPreference.HOME_STATUS
+    override val preferenceTitle = "Current Status"
+    override val summaryValue: String
+        get() {
+            val currentValue = getStringPrefValue(mvcPreference, sharedPreferences)
+
+            return if (currentValue.isEmpty()) {
+                "[No Connection Established]"
+            } else {
+                currentValue
+            }
+        }
 }

@@ -7,6 +7,7 @@ internal enum class MvcPreference {
     HOME_USERNAME,
     HOME_PASSWORD,
     HOME_CONNECTOR,
+    HOME_STATUS,
     SSL_PORT,
     SSL_VERSION,
     SSL_DO_SELECT_SUITES,

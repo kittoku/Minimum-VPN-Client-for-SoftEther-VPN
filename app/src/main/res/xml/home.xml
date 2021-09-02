@@ -5,4 +5,8 @@
     <kittoku.mvc.preference.custom.HomeUsernamePreference android:key="HOME_USERNAME"/>
     <kittoku.mvc.preference.custom.HomePasswordPreference android:key="HOME_PASSWORD"/>
     <kittoku.mvc.preference.custom.HomeConnectorPreference android:key="HOME_CONNECTOR"/>
+
+    <PreferenceCategory>
+        <kittoku.mvc.preference.custom.HomeStatusPreference android:key="HOME_STATUS"/>
+    </PreferenceCategory>
 </PreferenceScreen>

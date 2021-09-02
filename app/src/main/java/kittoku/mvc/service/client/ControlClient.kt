@@ -31,6 +31,7 @@ import java.nio.ByteBuffer
 internal class ControlClient(private val bridge: ClientBridge) {
     private lateinit var tcpTerminal: TCPTerminal
     private lateinit var ipTerminal: IPTerminal
+    private lateinit var observer: NetworkObserver
 
     private lateinit var softEtherClient: SoftEtherClient
     private lateinit var keepAliveClient: KeepAliveClient
@@ -121,6 +122,10 @@ internal class ControlClient(private val bridge: ClientBridge) {
             if (bridge.isTest) {
                 return@launch
             }
+
+
+            // start observing network
+            observer = NetworkObserver(bridge)
 
 
             // Establish VPN connection
@@ -454,6 +459,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
 
                     if (::tcpTerminal.isInitialized) tcpTerminal.close()
                     if (::ipTerminal.isInitialized) ipTerminal.close()
+                    if (::observer.isInitialized) observer.close()
 
                     if (::jobControl.isInitialized) jobControl.cancel()
                     if (::jobIncoming.isInitialized) jobIncoming.cancel()
