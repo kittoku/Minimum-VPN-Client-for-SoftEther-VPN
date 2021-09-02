@@ -103,7 +103,7 @@ internal class SoftEtherClient(private val bridge: ClientBridge) {
         properties.sepAuthType = SepAuthType().also { it.value = 1 }
         properties.sepUsername = SepUsername().also { it.value = "debug" }
         properties.sepProtocol = SepProtocol().also { it.value = 0 }
-        properties.sepHubName = SepHubName().also { it.value = "VPN" }
+        properties.sepHubName = SepHubName().also { it.value = bridge.serverHubName }
         properties.sepUseEncrypt = SepUseEncrypt().also { it.value = 1 }
         properties.sepUseCompress = SepUseCompress().also { it.value = 0 }
         properties.sepMaxConnection = SepMaxConnection().also { it.value = 1 }

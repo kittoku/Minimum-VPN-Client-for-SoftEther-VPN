@@ -62,3 +62,17 @@ internal class HomePasswordPreference(context: Context, attrs: AttributeSet) : N
         }
     }
 }
+
+internal class HomeHubPreference(context: Context, attrs: AttributeSet) : NonEmptyStringPreference(context, attrs) {
+    override val mvcPreference = MvcPreference.HOME_HUB
+    override val preferenceTitle = "Virtual HUB Name"
+    override val emptyNotice = "VPN"
+
+    override fun onAttached() {
+        super.onAttached()
+
+        if (!sharedPreferences.contains(mvcPreference.name)) {
+            text = "VPN"
+        }
+    }
+}

@@ -35,6 +35,7 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
 
     internal var serverPort: Int = 0
     internal var serverHostname: String = ""
+    internal var serverHubName: String = ""
     internal var clientUsername: String = ""
     internal var clientPassword: String = ""
     internal val clientMacAddress = ByteArray(ETHERNET_MAC_ADDRESS_SIZE)
@@ -62,6 +63,7 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
     internal fun prepareParameters(prefs: SharedPreferences) {
         serverPort = getIntPrefValue(MvcPreference.SSL_PORT, prefs)
         serverHostname = getStringPrefValue(MvcPreference.HOME_HOSTNAME, prefs)
+        serverHubName = getStringPrefValue(MvcPreference.HOME_HUB, prefs)
         clientUsername = getStringPrefValue(MvcPreference.HOME_USERNAME, prefs)
         clientPassword = getStringPrefValue(MvcPreference.HOME_PASSWORD, prefs)
         clientMacAddress.read(getStringPrefValue(MvcPreference.MAC_ADDRESS, prefs).toHexByteArray())

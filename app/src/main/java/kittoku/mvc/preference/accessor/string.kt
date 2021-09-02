@@ -9,6 +9,7 @@ internal fun getStringPrefValue(key: MvcPreference, prefs: SharedPreferences): S
         MvcPreference.HOME_HOSTNAME,
         MvcPreference.HOME_USERNAME,
         MvcPreference.HOME_PASSWORD,
+        MvcPreference.HOME_HUB,
         MvcPreference.MAC_ADDRESS -> ""
         MvcPreference.SSL_VERSION -> "DEFAULT"
         else -> throw NotImplementedError()

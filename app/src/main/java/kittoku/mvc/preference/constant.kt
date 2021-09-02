@@ -3,6 +3,7 @@ package kittoku.mvc.preference
 
 internal enum class MvcPreference {
     HOME_HOSTNAME,
+    HOME_HUB,
     HOME_USERNAME,
     HOME_PASSWORD,
     HOME_CONNECTOR,
