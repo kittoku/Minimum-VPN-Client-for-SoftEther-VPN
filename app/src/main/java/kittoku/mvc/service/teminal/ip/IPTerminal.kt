@@ -1,8 +1,6 @@
 package kittoku.mvc.service.teminal.ip
 
 import android.os.ParcelFileDescriptor
-import kittoku.mvc.debug.ErrorCode
-import kittoku.mvc.debug.MvcException
 import kittoku.mvc.extension.toInetAddress
 import kittoku.mvc.service.client.ClientBridge
 import kittoku.mvc.unit.ip.IPv4_VERSION_AND_HEADER_LENGTH
@@ -43,7 +41,7 @@ internal class IPTerminal(private val bridge: ClientBridge) {
         builder.setBlocking(true)
         builder.setMtu(IP_MTU)
 
-        fd = builder.establish() ?: throw MvcException(ErrorCode.IP_BUILDER_ESTABLISH_FAILED)
+        fd = builder.establish()!!
         inputStream = FileInputStream(fd.fileDescriptor)
         outputStream = FileOutputStream(fd.fileDescriptor)
     }

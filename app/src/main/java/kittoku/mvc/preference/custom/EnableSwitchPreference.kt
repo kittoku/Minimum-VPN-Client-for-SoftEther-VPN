@@ -22,3 +22,8 @@ internal class SslDoSelectSuitesPreference(context: Context, attrs: AttributeSet
     override val mvcPreference = MvcPreference.SSL_DO_SELECT_SUITES
     override val preferenceTitle = "Enable Only Selected Cipher Suites"
 }
+
+internal class LogDoSaveLogPreference(context: Context, attrs: AttributeSet) : EnableSwitchPreference(context, attrs) {
+    override val mvcPreference = MvcPreference.LOG_DO_SAVE_LOG
+    override val preferenceTitle = "Save Log"
+}

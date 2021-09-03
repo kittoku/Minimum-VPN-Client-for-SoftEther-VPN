@@ -7,7 +7,8 @@ import kittoku.mvc.preference.MvcPreference
 internal fun getBooleanPrefValue(key: MvcPreference, prefs: SharedPreferences): Boolean {
     val defaultValue = when (key) {
         MvcPreference.HOME_CONNECTOR,
-        MvcPreference.SSL_DO_SELECT_SUITES -> false
+        MvcPreference.SSL_DO_SELECT_SUITES,
+        MvcPreference.LOG_DO_SAVE_LOG -> false
         else -> throw NotImplementedError()
     }
 

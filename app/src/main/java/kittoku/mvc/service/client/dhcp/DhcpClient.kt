@@ -31,7 +31,7 @@ internal class DhcpClient(private val bridge: ClientBridge) {
                 val ack = startRequestAckSequence(offer, DHCP_RESEND_MESSAGE_TIMEOUT) ?: continue
 
                 if (!registerDhcpInformation(ack)) {
-                    throw MvcException(ErrorCode.DHCP_INVALID_CONFIGURATION_ASSIGNED)
+                    throw MvcException(ErrorCode.DHCP_INVALID_CONFIGURATION_ASSIGNED, null)
                 }
 
                 break

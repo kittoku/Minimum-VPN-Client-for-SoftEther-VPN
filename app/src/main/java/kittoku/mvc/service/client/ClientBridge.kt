@@ -1,6 +1,7 @@
 package kittoku.mvc.service.client
 
 import android.content.SharedPreferences
+import android.net.Uri
 import android.net.VpnService
 import kittoku.mvc.extension.read
 import kittoku.mvc.extension.toHexByteArray
@@ -58,6 +59,9 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
     internal val dhcpChannel = Channel<EthernetFrame>(1)
     internal val arpChannel = Channel<EthernetFrame>(1)
 
+    internal var isLogEnabled = false
+    internal var logDirectory: Uri? = null
+
     internal val random = SecureRandom()
 
     internal fun prepareParameters(prefs: SharedPreferences) {
@@ -73,6 +77,15 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
         selectedCipherSuites.clear()
         if (doSelectCipherSuites) {
             getSetPrefValue(MvcPreference.SSL_SUITES, prefs).forEach { selectedCipherSuites.add(it) }
+        }
+
+        isLogEnabled = getBooleanPrefValue(MvcPreference.LOG_DO_SAVE_LOG, prefs)
+        logDirectory = getStringPrefValue(MvcPreference.LOG_DIRECTORY, prefs).let {
+            if (it.isEmpty()) {
+                null
+            } else {
+                Uri.parse(it)
+            }
         }
     }
 }

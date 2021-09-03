@@ -1,15 +1,16 @@
-package kittoku.mvc.service.client
+package kittoku.mvc.service.client.stateless
 
 import android.net.*
 import androidx.preference.PreferenceManager
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.setStringPrefValue
+import kittoku.mvc.service.client.ClientBridge
 
 
-internal class NetworkObserver(val bridge: ClientBridge) {
+internal class NetworkObserver(bridge: ClientBridge) {
     private val manager = bridge.service.getSystemService(ConnectivityManager::class.java)
     private val callback: ConnectivityManager.NetworkCallback
-    private val prefs = PreferenceManager.getDefaultSharedPreferences(bridge.service.applicationContext)
+    private val prefs = PreferenceManager.getDefaultSharedPreferences(bridge.service)
 
     init {
         wipeStatus()

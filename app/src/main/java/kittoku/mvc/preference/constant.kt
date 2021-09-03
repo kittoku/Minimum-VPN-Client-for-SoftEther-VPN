@@ -13,6 +13,8 @@ internal enum class MvcPreference {
     SSL_DO_SELECT_SUITES,
     SSL_SUITES,
     MAC_ADDRESS,
+    LOG_DO_SAVE_LOG,
+    LOG_DIRECTORY,
     ABOUT_PROJECT,
     ABOUT_LINK_MVC,
     ABOUT_LINK_SOFTETHER,

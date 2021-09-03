@@ -27,7 +27,7 @@ internal class ARPClient(private val bridge: ClientBridge) {
                 val reply = startResolveDefaultGatewaySequence(DHCP_RESEND_MESSAGE_TIMEOUT) ?: continue
 
                 if (!registerArpInformation(reply)) {
-                    throw MvcException(ErrorCode.ARP_INVALID_CONFIGURATION_ASSIGNED)
+                    throw MvcException(ErrorCode.ARP_INVALID_CONFIGURATION_ASSIGNED, null)
                 }
 
                 break

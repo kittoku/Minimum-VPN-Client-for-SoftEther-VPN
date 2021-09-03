@@ -63,7 +63,7 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
             val readLength = socket.inputStream.read(buffer.array(), buffer.limit(), capacity)
 
             if (readLength < 0) {
-                throw MvcException(ErrorCode.TCP_SOCKET_CLOSED)
+                throw MvcException(ErrorCode.TCP_SOCKET_CLOSED, null)
             }
 
             buffer.limit(buffer.limit() + readLength)

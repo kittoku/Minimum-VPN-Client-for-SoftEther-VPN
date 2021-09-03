@@ -13,11 +13,11 @@ internal fun assertOrThrow(code: ErrorCode, body: () -> Unit) {
     try {
         body()
     } catch (e: AssertException) {
-        throw MvcException(code)
+        throw MvcException(code, e)
     }
 }
 
-internal class MvcException(code: ErrorCode) : Exception(code.name)
+internal class MvcException(code: ErrorCode, cause: Throwable?) : Exception(code.name, cause)
 
 internal enum class ErrorCode {
     TCP_SOCKET_CLOSED,
@@ -32,5 +32,4 @@ internal enum class ErrorCode {
     DHCP_INVALID_CONFIGURATION_ASSIGNED,
     ARP_NEGOTIATION_TIMEOUT,
     ARP_INVALID_CONFIGURATION_ASSIGNED,
-    IP_BUILDER_ESTABLISH_FAILED,
 }

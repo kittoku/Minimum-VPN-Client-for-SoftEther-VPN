@@ -1,7 +1,9 @@
 package kittoku.mvc.service.client
 
-import android.util.Log
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
+import kittoku.mvc.R
 import kittoku.mvc.debug.ErrorCode
 import kittoku.mvc.debug.MvcException
 import kittoku.mvc.debug.assertAlways
@@ -9,11 +11,14 @@ import kittoku.mvc.debug.assertOrThrow
 import kittoku.mvc.extension.*
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.setBooleanPrefValue
+import kittoku.mvc.service.CHANNEL_ID
 import kittoku.mvc.service.client.*
 import kittoku.mvc.service.client.arp.ARPClient
 import kittoku.mvc.service.client.dhcp.DhcpClient
 import kittoku.mvc.service.client.keepalive.KeepAliveClient
 import kittoku.mvc.service.client.softether.SoftEtherClient
+import kittoku.mvc.service.client.stateless.LogWriter
+import kittoku.mvc.service.client.stateless.NetworkObserver
 import kittoku.mvc.service.teminal.ip.IPTerminal
 import kittoku.mvc.service.teminal.tcp.TCPTerminal
 import kittoku.mvc.unit.ethernet.*
@@ -31,7 +36,8 @@ import java.nio.ByteBuffer
 internal class ControlClient(private val bridge: ClientBridge) {
     private lateinit var tcpTerminal: TCPTerminal
     private lateinit var ipTerminal: IPTerminal
-    private lateinit var observer: NetworkObserver
+    private lateinit var networkObserver: NetworkObserver
+    private var logWriter: LogWriter? = null
 
     private lateinit var softEtherClient: SoftEtherClient
     private lateinit var keepAliveClient: KeepAliveClient
@@ -53,11 +59,17 @@ internal class ControlClient(private val bridge: ClientBridge) {
     private lateinit var jobControl: Job
 
     internal fun run() {
+        if (bridge.isLogEnabled && bridge.logDirectory != null) {
+            logWriter = LogWriter(bridge)
+        }
+
         launchJobIncoming()
     }
 
     private fun launchJobIncoming() {
         jobIncoming = bridge.scope.launch(bridge.handler) {
+            logWriter?.report("Connecting has been attempted")
+
             tcpTerminal = TCPTerminal(bridge).also { it.createSocket() }
             tcpTerminal.setTimeoutForControl()
             ipTerminal = IPTerminal(bridge)
@@ -77,7 +89,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
 
                 assertAlways(mailbox.receive() == ControlMessage.SOFTETHER_NEGOTIATION_FINISHED)
                 bridge.softEtherChannel.clear()
-            } ?: throw MvcException(ErrorCode.SOFTETHER_NEGOTIATION_TIMEOUT)
+            } ?: throw MvcException(ErrorCode.SOFTETHER_NEGOTIATION_TIMEOUT, null)
 
 
             // send first keep alive
@@ -85,7 +97,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
 
             withTimeoutOrNull(KEEP_ALIVE_INIT_TIMEOUT) {
                 assertAlways(mailbox.receive() == ControlMessage.KEEP_ALIVE_INIT_FINISHED)
-            } ?: throw MvcException(ErrorCode.KEEP_ALIVE_INIT_FAILED)
+            } ?: throw MvcException(ErrorCode.KEEP_ALIVE_INIT_FAILED, null)
 
 
             // DHCP negotiation
@@ -100,7 +112,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
                         break
                     }
                 }
-            } ?: throw MvcException(ErrorCode.DHCP_NEGOTIATION_TIMEOUT)
+            } ?: throw MvcException(ErrorCode.DHCP_NEGOTIATION_TIMEOUT, null)
 
 
             // ARP negotiation
@@ -115,7 +127,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
                         break
                     }
                 }
-            } ?: throw MvcException(ErrorCode.ARP_NEGOTIATION_TIMEOUT)
+            } ?: throw MvcException(ErrorCode.ARP_NEGOTIATION_TIMEOUT, null)
 
 
             // if this is test, we need to get out because VpnService.Builder is not given
@@ -125,7 +137,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
 
 
             // start observing network
-            observer = NetworkObserver(bridge)
+            networkObserver = NetworkObserver(bridge)
 
 
             // Establish VPN connection
@@ -134,6 +146,8 @@ internal class ControlClient(private val bridge: ClientBridge) {
             ipTerminal.initializeBuilder()
             ipTerminal.launchJobRetrieve()
             launchJobOutgoing()
+
+            logWriter?.report("VPN connection has been established")
 
             while (isActive) {
                 relayIPPacket()
@@ -403,7 +417,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
                         continue
                     }
                     is AssertionError -> {
-                        throw MvcException(ErrorCode.SOFTETHER_INVALID_HTTP_MESSAGE)
+                        throw MvcException(ErrorCode.SOFTETHER_INVALID_HTTP_MESSAGE, null)
                     }
                 }
             }
@@ -448,26 +462,57 @@ internal class ControlClient(private val bridge: ClientBridge) {
         }
     }
 
+    private fun notify(message: String) {
+        val builder = NotificationCompat.Builder(bridge.service, CHANNEL_ID).also {
+            it.setSmallIcon(R.drawable.ic_baseline_vpn_lock_24)
+            it.priority = NotificationCompat.PRIORITY_DEFAULT
+            it.setAutoCancel(true)
+            it.setStyle(NotificationCompat.BigTextStyle().bigText(message))
+        }
+
+        NotificationManagerCompat.from(bridge.service).also {
+            it.notify(0, builder.build())
+        }
+    }
+
     internal fun kill(throwable: Throwable?) {
         bridge.scope.launch {
             mutex.withLock {
                 if (!isClosing) {
-                    // TODO: need to inform the stacktrace to user
-                    Log.d("MVC", "EXCEPTION: \n" + throwable?.stackTraceToString())
+                    if (throwable != null) {
+                        // report exception first
+                        var message = "Disconnected because of "
+
+                        message += if (throwable is MvcException) {
+                            throwable.message
+                        } else {
+                            "UNKNOWN EXCEPTION/ERROR"
+                        }
+
+                        notify(message)
+                        logWriter?.reportThrowable(throwable)
+                    }
 
                     isClosing = true
 
                     if (::tcpTerminal.isInitialized) tcpTerminal.close()
                     if (::ipTerminal.isInitialized) ipTerminal.close()
-                    if (::observer.isInitialized) observer.close()
+                    if (::networkObserver.isInitialized) networkObserver.close()
 
                     if (::jobControl.isInitialized) jobControl.cancel()
                     if (::jobIncoming.isInitialized) jobIncoming.cancel()
                     if (::jobOutgoing.isInitialized) jobOutgoing.cancel()
 
-                    PreferenceManager.getDefaultSharedPreferences(bridge.service.applicationContext).also {
+                    PreferenceManager.getDefaultSharedPreferences(bridge.service).also {
                         setBooleanPrefValue(false, MvcPreference.HOME_CONNECTOR, it)
                     }
+
+                    if (throwable == null) {
+                        // after confirming everything was OK
+                        logWriter?.report("The connection has been closed")
+                    }
+
+                    logWriter?.close()
 
                     bridge.service.stopForeground(true)
                     bridge.service.stopSelf()
