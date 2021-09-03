@@ -6,12 +6,8 @@ import android.util.AttributeSet
 import android.widget.TextView
 import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
-import kittoku.mvc.extension.nextBytes
-import kittoku.mvc.extension.toHexString
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.getStringPrefValue
-import kittoku.mvc.preference.accessor.setStringPrefValue
-import java.security.SecureRandom
 
 
 internal abstract class SummaryOnlyPreference(context: Context, attrs: AttributeSet) : Preference(context, attrs) {
@@ -59,20 +55,15 @@ internal class MacAddressPreference(context: Context, attrs: AttributeSet) : Sum
     override val mvcPreference = MvcPreference.MAC_ADDRESS
     override val preferenceTitle = "MAC Address"
     override val summaryValue: String
-        get() = getStringPrefValue(mvcPreference, sharedPreferences).chunked(2).joinToString(":")
+        get() {
+            val address = getStringPrefValue(mvcPreference, sharedPreferences)
 
-    override fun onAttached() {
-        super.onAttached()
-
-        initializeMacAddress()
-    }
-
-    private fun initializeMacAddress() {
-        if (getStringPrefValue(mvcPreference, sharedPreferences).isEmpty()) {
-            val newAddress = "5E" + SecureRandom().nextBytes(5).toHexString()
-            setStringPrefValue(newAddress, mvcPreference, sharedPreferences)
+            return if (address.isEmpty()) {
+                "[No Address Assigned]"
+            } else {
+                address.chunked(2).joinToString(":")
+            }
         }
-    }
 }
 
 internal class AboutProjectPreference(context: Context, attrs: AttributeSet) : SummaryOnlyPreference(context, attrs) {

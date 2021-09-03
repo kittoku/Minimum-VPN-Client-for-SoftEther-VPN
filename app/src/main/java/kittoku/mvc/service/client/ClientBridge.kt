@@ -3,13 +3,12 @@ package kittoku.mvc.service.client
 import android.content.SharedPreferences
 import android.net.Uri
 import android.net.VpnService
+import kittoku.mvc.extension.nextBytes
 import kittoku.mvc.extension.read
 import kittoku.mvc.extension.toHexByteArray
+import kittoku.mvc.extension.toHexString
 import kittoku.mvc.preference.MvcPreference
-import kittoku.mvc.preference.accessor.getBooleanPrefValue
-import kittoku.mvc.preference.accessor.getIntPrefValue
-import kittoku.mvc.preference.accessor.getSetPrefValue
-import kittoku.mvc.preference.accessor.getStringPrefValue
+import kittoku.mvc.preference.accessor.*
 import kittoku.mvc.unit.DataUnit
 import kittoku.mvc.unit.ethernet.ETHERNET_MAC_ADDRESS_SIZE
 import kittoku.mvc.unit.ethernet.EthernetFrame
@@ -70,7 +69,7 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
         serverHubName = getStringPrefValue(MvcPreference.HOME_HUB, prefs)
         clientUsername = getStringPrefValue(MvcPreference.HOME_USERNAME, prefs)
         clientPassword = getStringPrefValue(MvcPreference.HOME_PASSWORD, prefs)
-        clientMacAddress.read(getStringPrefValue(MvcPreference.MAC_ADDRESS, prefs).toHexByteArray())
+        clientMacAddress.read(loadMac(prefs))
 
         sslVersion = getStringPrefValue(MvcPreference.SSL_VERSION, prefs)
         doSelectCipherSuites = getBooleanPrefValue(MvcPreference.SSL_DO_SELECT_SUITES, prefs)
@@ -80,12 +79,27 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
         }
 
         isLogEnabled = getBooleanPrefValue(MvcPreference.LOG_DO_SAVE_LOG, prefs)
-        logDirectory = getStringPrefValue(MvcPreference.LOG_DIRECTORY, prefs).let {
-            if (it.isEmpty()) {
-                null
-            } else {
-                Uri.parse(it)
-            }
+        logDirectory = loadUri(MvcPreference.LOG_DIRECTORY, prefs)
+    }
+
+    private fun loadUri(key: MvcPreference, prefs: SharedPreferences): Uri? {
+        val uriString = getStringPrefValue(key, prefs)
+
+        return if (uriString.isEmpty()) {
+            null
+        } else {
+            Uri.parse(uriString)
         }
+    }
+
+    private fun loadMac(prefs: SharedPreferences): ByteArray {
+        var addressString = getStringPrefValue(MvcPreference.MAC_ADDRESS, prefs)
+
+        if (addressString.isEmpty()) {
+            addressString = "5E" + random.nextBytes(5).toHexString()
+            setStringPrefValue(addressString, MvcPreference.MAC_ADDRESS, prefs)
+        }
+
+        return addressString.toHexByteArray()
     }
 }
