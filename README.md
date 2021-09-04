@@ -21,13 +21,13 @@ Since UDP acceleration is not yet implemented, this app has less performance tha
 
 ## Milestones
 - [x] works with a global-IP-address-assigned server
-- [ ] works with VPN azure
+- [x] works with VPN azure
 - [ ] works with a global-IP-address-assigned server + UDP acceleration
 - [ ] works with VPN azure + UDP acceleration
 
 ## Installation
 You can download the latest version APK
-[here](https://github.com/kittoku/Minimum-VPN-Client-for-SoftEther-VPN/releases/download/v0.1.0/mvc-0.1.0.apk).
+[here](https://github.com/kittoku/Minimum-VPN-Client-for-SoftEther-VPN/releases/download/v0.1.1/mvc-0.1.1.apk).
 
 ## Screenshots
 <img src="images/example_home.png" width=25%> <img src="images/example_setting.png" width=25%>
