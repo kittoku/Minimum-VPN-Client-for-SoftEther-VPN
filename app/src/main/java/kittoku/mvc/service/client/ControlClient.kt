@@ -83,7 +83,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
             launchJobControl()
 
             withTimeoutOrNull(SOFTETHER_NEGOTIATION_TIMEOUT) {
-                repeat(3) {
+                repeat(2) {
                     relaySoftEtherMessage()
                 }
 

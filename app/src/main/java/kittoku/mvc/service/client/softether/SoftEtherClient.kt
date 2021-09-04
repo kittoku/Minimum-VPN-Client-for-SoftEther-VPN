@@ -19,7 +19,6 @@ internal class SoftEtherClient(private val bridge: ClientBridge) {
 
     internal fun launchJobNegotiation() {
         bridge.scope.launch(bridge.handler) {
-            checkSoftEtherServer()
             uploadWatermark()
             uploadProperties()
 
@@ -27,7 +26,7 @@ internal class SoftEtherClient(private val bridge: ClientBridge) {
         }
     }
 
-    private suspend fun checkSoftEtherServer() {
+    private suspend fun checkSoftEtherServer() { // reserved for future use
         val request = HttpMessage().also {
             it.header = "GET / HTTP/1.1"
             it.fieldMap["X-VPN"] = "1"
