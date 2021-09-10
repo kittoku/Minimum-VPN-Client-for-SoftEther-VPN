@@ -7,7 +7,6 @@ import kittoku.mvc.R
 import kittoku.mvc.debug.ErrorCode
 import kittoku.mvc.debug.MvcException
 import kittoku.mvc.debug.assertAlways
-import kittoku.mvc.debug.assertOrThrow
 import kittoku.mvc.extension.*
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.setBooleanPrefValue
@@ -15,7 +14,6 @@ import kittoku.mvc.service.CHANNEL_ID
 import kittoku.mvc.service.client.*
 import kittoku.mvc.service.client.arp.ARPClient
 import kittoku.mvc.service.client.dhcp.DhcpClient
-import kittoku.mvc.service.client.keepalive.KeepAliveClient
 import kittoku.mvc.service.client.softether.SoftEtherClient
 import kittoku.mvc.service.client.stateless.LogWriter
 import kittoku.mvc.service.client.stateless.NetworkObserver
@@ -23,14 +21,9 @@ import kittoku.mvc.service.teminal.ip.IPTerminal
 import kittoku.mvc.service.teminal.tcp.TCPTerminal
 import kittoku.mvc.unit.ethernet.*
 import kittoku.mvc.unit.http.HttpMessage
-import kittoku.mvc.unit.ip.IP_PROTOCOL_UDP
-import kittoku.mvc.unit.keepalive.KEEP_ALIVE_FRAME_NUM
-import kittoku.mvc.unit.keepalive.KeepAlivePacket
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.nio.BufferUnderflowException
-import java.nio.ByteBuffer
 
 
 internal class ControlClient(private val bridge: ClientBridge) {
@@ -40,16 +33,10 @@ internal class ControlClient(private val bridge: ClientBridge) {
     private var logWriter: LogWriter? = null
 
     private lateinit var softEtherClient: SoftEtherClient
-    private lateinit var keepAliveClient: KeepAliveClient
     private lateinit var dhcpClient: DhcpClient
     private lateinit var arpClient: ARPClient
 
-    private val incomingBuffer = ByteBuffer.allocate(16384)
-    private val outgoingBuffer = ByteBuffer.allocate(16384)
-
     private val mailbox = bridge.controlMailbox
-
-    private val macAddressHolder = ByteArray(ETHERNET_MAC_ADDRESS_SIZE)
 
     private var isClosing = false
     private val mutex = Mutex()
@@ -74,8 +61,6 @@ internal class ControlClient(private val bridge: ClientBridge) {
             tcpTerminal.setTimeoutForControl()
             ipTerminal = IPTerminal(bridge)
 
-            discardPayload(incomingBuffer)
-
 
             // SoftEther negotiation
             softEtherClient = SoftEtherClient(bridge).also { it.launchJobNegotiation() }
@@ -92,12 +77,8 @@ internal class ControlClient(private val bridge: ClientBridge) {
             } ?: throw MvcException(ErrorCode.SOFTETHER_NEGOTIATION_TIMEOUT, null)
 
 
-            // send first keep alive
-            keepAliveClient = KeepAliveClient(bridge).also { it.launchJobKeepAlive() }
-
-            withTimeoutOrNull(KEEP_ALIVE_INIT_TIMEOUT) {
-                assertAlways(mailbox.receive() == ControlMessage.KEEP_ALIVE_INIT_FINISHED)
-            } ?: throw MvcException(ErrorCode.KEEP_ALIVE_INIT_FAILED, null)
+            // start to keep alive tcp
+            tcpTerminal.launchJobKeepAlive()
 
 
             // DHCP negotiation
@@ -142,7 +123,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
 
             // Establish VPN connection
             tcpTerminal.setTimeoutForData()
-            bridge.service.protect(tcpTerminal.socket)
+            tcpTerminal.protectSocket()
             ipTerminal.initializeBuilder()
             ipTerminal.launchJobRetrieve()
             launchJobOutgoing()
@@ -150,6 +131,10 @@ internal class ControlClient(private val bridge: ClientBridge) {
             logWriter?.report("VPN connection has been established")
 
             while (isActive) {
+                if (mailbox.poll() == ControlMessage.SECURE_NAT_ECHO_REQUEST) {
+                    arpClient.launchReplyBeacon()
+                }
+
                 relayIPPacket()
             }
         }
@@ -158,29 +143,18 @@ internal class ControlClient(private val bridge: ClientBridge) {
     private fun launchJobOutgoing() {
         jobOutgoing = bridge.scope.launch(bridge.handler) {
             while (isActive) {
-                outgoingBuffer.clear()
-                outgoingBuffer.move(Int.SIZE_BYTES)
-
                 ipTerminal.waitOutgoingPacket().also {
-                    addEthernetHeaderForIPPacket(it.limit())
-                    outgoingBuffer.put(it)
+                    tcpTerminal.loadOutgoingPacket(it)
                 }
-
-                var frameNum = 1
 
                 while (isActive) {
-                    if (outgoingBuffer.remaining() < ETHERNET_MTU) break
+                    val polled = ipTerminal.pollOutgoingPacket() ?: break
 
-                    ipTerminal.pollOutgoingPacket()?.also {
-                        addEthernetHeaderForIPPacket(it.limit())
-                        outgoingBuffer.put(it)
-                        frameNum += 1
-                    } ?: break
+                    val isAddable = tcpTerminal.addOutGoingPacket(polled)
+                    if (!isAddable) break
                 }
 
-                outgoingBuffer.putInt(0, frameNum)
-                outgoingBuffer.flip()
-                tcpTerminal.sendStream(outgoingBuffer)
+                tcpTerminal.sendOutgoingPacket()
             }
         }
     }
@@ -190,32 +164,11 @@ internal class ControlClient(private val bridge: ClientBridge) {
             while (isActive) {
                 when (val received = bridge.controlChannel.receive()) {
                     is HttpMessage -> {
-                        if (::keepAliveClient.isInitialized) {
-                            throw NotImplementedError()
-                        }
-
-                        outgoingBuffer.clear()
-                        received.write(outgoingBuffer)
-                        outgoingBuffer.flip()
-                        tcpTerminal.sendStream(outgoingBuffer)
+                        tcpTerminal.sendHttpMessage(received)
                     }
 
                     is EthernetFrame -> {
-                        val buffer = ByteBuffer.allocate(2 * Int.SIZE_BYTES + received.length)
-                        buffer.clear()
-                        buffer.putInt(1)
-                        buffer.putInt(received.length)
-                        received.write(buffer)
-                        buffer.flip()
-                        tcpTerminal.sendStream(buffer)
-                    }
-
-                    is KeepAlivePacket -> {
-                        val buffer = ByteBuffer.allocate(2 * Int.SIZE_BYTES + received.length)
-                        buffer.clear()
-                        received.write(buffer)
-                        buffer.flip()
-                        tcpTerminal.sendStream(buffer)
+                        tcpTerminal.sendFrame(received)
                     }
 
                     else -> throw NotImplementedError()
@@ -224,241 +177,30 @@ internal class ControlClient(private val bridge: ClientBridge) {
         }
     }
 
-    private fun discardPayload(buffer: ByteBuffer) {
-        buffer.position(0)
-        buffer.limit(0)
-    }
-
-    private fun addEthernetHeaderForIPPacket(packetLength: Int) {
-        outgoingBuffer.putInt(ETHERNET_HEADER_SIZE + packetLength)
-        outgoingBuffer.put(bridge.defaultGatewayMacAddress)
-        outgoingBuffer.put(bridge.clientMacAddress)
-        outgoingBuffer.putShort(ETHER_TYPE_IPv4)
-    }
-
-    private fun searchCompleteFrameNum(): Int {
-        if (incomingBuffer.remaining() < Int.SIZE_BYTES) {
-            return 0
-        }
-
-        incomingBuffer.mark()
-
-        var isKeepAlive = false
-
-        var frameNum = incomingBuffer.int
-        if (frameNum == KEEP_ALIVE_FRAME_NUM) {
-            frameNum = 1
-            isKeepAlive = true
-        }
-
-        assertOrThrow(ErrorCode.SOFTETHER_INVALID_FRAME_PACK) {
-            assertAlways(frameNum > 0)
-        }
-
-        var completeFrameNum = 0
-        repeat(frameNum) {
-            if (incomingBuffer.remaining() < Int.SIZE_BYTES) {
-                incomingBuffer.reset()
-                return completeFrameNum
-            }
-
-            val frameLength = incomingBuffer.int
-            assertOrThrow(ErrorCode.SOFTETHER_INVALID_FRAME_PACK) {
-                assertAlways(frameLength > 0)
-            }
-
-            if (incomingBuffer.remaining() < frameLength) {
-                incomingBuffer.reset()
-                return completeFrameNum
-            }
-
-            incomingBuffer.move(frameLength)
-
-            completeFrameNum += 1
-        }
-
-        return if (isKeepAlive) {
-            0
-        } else {
-            incomingBuffer.reset()
-            return frameNum
-        }
-    }
-
-    private suspend fun ensureSomeFrame(): Int {
-        var frameNum: Int
-
-        while (true) {
-            frameNum = searchCompleteFrameNum()
-
-            if (frameNum > 0) {
-                break
-            } else {
-                yield()
-                tcpTerminal.extendStream(incomingBuffer)
-            }
-        }
-
-        return frameNum
-    }
-
-    private fun expectValidFrame(): EthernetFrame? {
-        val frame =  EthernetFrame()
-        val frameLength = incomingBuffer.int
-        val startFrame = incomingBuffer.position()
-        val stopFrame = startFrame + frameLength
-        val currentLimit = incomingBuffer.limit()
-        incomingBuffer.limit(stopFrame) // avoid frame reading beyond expected length
-        incomingBuffer.move(-Int.SIZE_BYTES) // leave length info for EtherFrame.read
-
-        try {
-            frame.read(incomingBuffer)
-        } catch (e: Exception) { // TODO: need notify receiving invalid frame
-            incomingBuffer.position(stopFrame) // discard frame
-            incomingBuffer.limit(currentLimit)
-            return null
-        }
-
-        if (incomingBuffer.hasRemaining()) {
-            incomingBuffer.position(stopFrame)
-            // TODO: need notify receiving invalid frame
-        }
-
-        incomingBuffer.limit(currentLimit)
-        return frame
-    }
-
-    private fun isToMeFrame(buffer: ByteBuffer): Boolean {
-        // start with Ethernet frame header, consume
-        buffer.get(macAddressHolder)
-
-        if (macAddressHolder.isSame(bridge.clientMacAddress)) {
-            return true
-        }
-
-        if (macAddressHolder.isSame(ETHERNET_BROADCAST_ADDRESS)) {
-            return true
-        }
-
-        return false
-    }
-
-    private fun isEcho(buffer: ByteBuffer): Boolean {
-        // start with IP Header, don't consume
-        if (buffer.remaining() < 24) { // 24 = d(IPHeaderStart, UDPPortStop)
-            return false
-        }
-
-        val protocolIndex = buffer.position() + 9
-        if (buffer.get(protocolIndex) != IP_PROTOCOL_UDP) {
-            return false
-        }
-
-        val srcPortIndex = protocolIndex + 11
-        if (buffer.getShort(srcPortIndex) != UDP_PORT_ECHO) {
-            return false
-        }
-
-        val dstPortIndex = srcPortIndex + 2
-        if (buffer.getShort(dstPortIndex) != UDP_PORT_ECHO) {
-            return false
-        }
-
-        return true
-    }
-
-    private fun tryFeedIPPacket() {
-        // avoid instantiating EthernetFrame for performance
-        val frameLength = incomingBuffer.int
-        val startFrame = incomingBuffer.position()
-        val stopFrame = startFrame + frameLength
-        val currentLimit = incomingBuffer.limit()
-        incomingBuffer.limit(stopFrame) // avoid frame reading beyond expected length
-
-
-        if (!isToMeFrame(incomingBuffer)) {
-            incomingBuffer.position(stopFrame) // discard frame
-            incomingBuffer.limit(currentLimit)
-            return
-        }
-
-        incomingBuffer.move(ETHERNET_MAC_ADDRESS_SIZE) // ignore sender's MAC address
-
-        if (incomingBuffer.short != ETHER_TYPE_IPv4) {
-            incomingBuffer.position(stopFrame) // discard frame
-            incomingBuffer.limit(currentLimit)
-            return
-        }
-
-        if (isEcho(incomingBuffer)) {
-            // send ARP Replay anyway
-            arpClient.launchReplyBeacon()
-        }
-
-        ipTerminal.feedIncomingPacket(incomingBuffer)
-        incomingBuffer.limit(currentLimit)
-    }
-
     private suspend fun relaySoftEtherMessage() {
-        var startPack = incomingBuffer.position()
-
-        while (jobIncoming.isActive) {
-            try {
-                val response = HttpMessage()
-                response.read(incomingBuffer)
-                bridge.softEtherChannel.send(response)
-                break
-            } catch (e: Exception) {
-                when (e) {
-                    is BufferUnderflowException -> {
-                        incomingBuffer.position(startPack)
-                        tcpTerminal.extendStream(incomingBuffer)
-                        startPack = incomingBuffer.position()
-                        continue
-                    }
-                    is AssertionError -> {
-                        throw MvcException(ErrorCode.SOFTETHER_INVALID_HTTP_MESSAGE, null)
-                    }
-                }
-            }
-        }
-    }
-
-    private suspend fun relayFromFramePack(body: suspend () -> Unit) {
-        val actualFrameNum = ensureSomeFrame()
-        val potentialFrameNum = incomingBuffer.int
-
-        repeat(actualFrameNum) { body() }
-
-        if (actualFrameNum < potentialFrameNum) {
-            incomingBuffer.move(-Int.SIZE_BYTES)
-            incomingBuffer.putInt(incomingBuffer.position(), potentialFrameNum - actualFrameNum)
-        }
+        val response = tcpTerminal.receiveHttpMessage()
+        bridge.softEtherChannel.send(response)
     }
 
     private suspend fun relayDhcpMessage() {
-        relayFromFramePack {
-            val frame = expectValidFrame()
-
-            if (frame?.payloadIPv4Packet?.payloadUDPDatagram?.payloadDhcpMessage != null) {
-                bridge.dhcpChannel.send(frame)
+        tcpTerminal.consumeFrame {
+            if (it.payloadIPv4Packet?.payloadUDPDatagram?.payloadDhcpMessage != null) {
+                bridge.dhcpChannel.send(it)
             }
         }
     }
 
     private suspend fun relayAprPacket() {
-        relayFromFramePack {
-            val frame = expectValidFrame()
-
-            if (frame?.payloadARPPacket != null) {
-                bridge.arpChannel.send(frame)
+        tcpTerminal.consumeFrame {
+            if (it.payloadARPPacket != null) {
+                bridge.arpChannel.send(it)
             }
         }
     }
 
     private suspend fun relayIPPacket() {
-        relayFromFramePack {
-            tryFeedIPPacket()
+        tcpTerminal.consumeIPPacketBuffer {
+            ipTerminal.feedIncomingPacket(it)
         }
     }
 

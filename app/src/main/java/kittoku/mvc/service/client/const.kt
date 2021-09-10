@@ -5,7 +5,6 @@ import kittoku.mvc.unit.ethernet.ETHERNET_HEADER_SIZE
 
 
 internal const val SOFTETHER_NEGOTIATION_TIMEOUT: Long = 30_000
-internal const val KEEP_ALIVE_INIT_TIMEOUT: Long = 3_000
 internal const val DHCP_NEGOTIATION_TIMEOUT: Long = 30_000
 internal const val ARP_NEGOTIATION_TIMEOUT: Long = 30_000
 

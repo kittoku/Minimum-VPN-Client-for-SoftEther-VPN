@@ -22,9 +22,9 @@ import java.security.SecureRandom
 
 internal enum class ControlMessage {
     SOFTETHER_NEGOTIATION_FINISHED,
-    KEEP_ALIVE_INIT_FINISHED,
     DHCP_NEGOTIATION_FINISHED,
     ARP_NEGOTIATION_FINISHED,
+    SECURE_NAT_ECHO_REQUEST,
 }
 
 internal class ClientBridge(internal val scope: CoroutineScope, internal val handler: CoroutineExceptionHandler) {

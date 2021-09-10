@@ -1,8 +1,11 @@
 package kittoku.mvc.service.teminal.ip
 
 import android.os.ParcelFileDescriptor
+import kittoku.mvc.extension.move
 import kittoku.mvc.extension.toInetAddress
 import kittoku.mvc.service.client.ClientBridge
+import kittoku.mvc.unit.ethernet.ETHERNET_HEADER_SIZE
+import kittoku.mvc.unit.ethernet.ETHER_TYPE_IPv4
 import kittoku.mvc.unit.ip.IPv4_VERSION_AND_HEADER_LENGTH
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -48,8 +51,9 @@ internal class IPTerminal(private val bridge: ClientBridge) {
 
     internal fun launchJobRetrieve() {
         jobRetrieve = bridge.scope.launch(bridge.handler) {
-            val alpha = ByteBuffer.allocate(IP_MTU)
-            val beta = ByteBuffer.allocate(IP_MTU)
+            val bufferSize = IP_MTU + ETHERNET_HEADER_SIZE
+            val alpha = ByteBuffer.allocate(bufferSize)
+            val beta = ByteBuffer.allocate(bufferSize)
 
             var isAlphaGo = true
 
@@ -67,10 +71,14 @@ internal class IPTerminal(private val bridge: ClientBridge) {
 
     private suspend fun retrievePacket(buffer: ByteBuffer) {
         buffer.clear()
-        val readLength = inputStream.read(buffer.array())
-        buffer.limit(readLength)
+        buffer.put(bridge.defaultGatewayMacAddress)
+        buffer.put(bridge.clientMacAddress)
+        buffer.putShort(ETHER_TYPE_IPv4)
+        val readLength = inputStream.read(buffer.array(), buffer.position(), IP_MTU)
+        buffer.move(readLength)
+        buffer.flip()
 
-        if (buffer.get(0) == IPv4_VERSION_AND_HEADER_LENGTH) { // send only IPv4 packet
+        if (buffer.get(ETHERNET_HEADER_SIZE) == IPv4_VERSION_AND_HEADER_LENGTH) { // send only IPv4 packet
             retrieveChannel.send(buffer)
         }
     }

@@ -19,8 +19,6 @@ internal class IPv4Packet : DataUnit { // not to be fragmented
     internal var payloadUDPDatagram: UDPDatagram? = null
     internal var payloadUnknown: ByteArray? = null
 
-    private val headerLength = 5 * Int.SIZE_BYTES
-
     private val validPayloadLength: Int
         get() {
             return when {
@@ -31,7 +29,7 @@ internal class IPv4Packet : DataUnit { // not to be fragmented
         }
 
     override val length: Int
-        get() = headerLength + validPayloadLength
+        get() = IPv4_HEADER_SIZE + validPayloadLength
 
     override fun write(buffer: ByteBuffer) {
         val startIp = buffer.position()
@@ -68,7 +66,7 @@ internal class IPv4Packet : DataUnit { // not to be fragmented
         assert(buffer.get() == IPv4_VERSION_AND_HEADER_LENGTH)
         buffer.move(Byte.SIZE_BYTES) // ignore tos
 
-        val payloadLength = buffer.short - headerLength
+        val payloadLength = buffer.short - IPv4_HEADER_SIZE
         assertAlways(payloadLength >= 0)
 
         identification = buffer.short
@@ -95,7 +93,7 @@ internal class IPv4Packet : DataUnit { // not to be fragmented
     private fun calcChecksum(start: Int, buffer: ByteBuffer): Short {
         var sum = 0
 
-        (start until (start + headerLength) step 2).forEach {
+        (start until (start + IPv4_HEADER_SIZE) step 2).forEach {
             sum = sum.addOnesComplement(buffer.getShort(it).toIntAsUShort())
         }
 

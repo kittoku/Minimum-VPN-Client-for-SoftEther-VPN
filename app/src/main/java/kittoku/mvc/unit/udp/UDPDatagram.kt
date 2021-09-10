@@ -19,7 +19,6 @@ internal class UDPDatagram : DataUnit { // for only TCP Connection, not UDP acce
     internal var payloadUnknown: ByteArray? = null
 
     private var pseudoIPHeader: ByteArray? = null // don't validate checksum if null
-    private val headerLength = 4 * Short.SIZE_BYTES
 
     private val validPayloadLength: Int
         get() {
@@ -31,7 +30,7 @@ internal class UDPDatagram : DataUnit { // for only TCP Connection, not UDP acce
         }
 
     override val length: Int
-        get() = headerLength + validPayloadLength
+        get() = UDP_HEADER_SIZE + validPayloadLength
 
     override fun write(buffer: ByteBuffer) {
         val startUdp = buffer.position()
@@ -66,7 +65,7 @@ internal class UDPDatagram : DataUnit { // for only TCP Connection, not UDP acce
         srcPort = buffer.short.toIntAsUShort()
         dstPort = buffer.short.toIntAsUShort()
 
-        val payloadLength = buffer.short - headerLength
+        val payloadLength = buffer.short - UDP_HEADER_SIZE
         assertAlways(payloadLength >= 0)
 
         val givenChecksum = buffer.short // discard given checksum
