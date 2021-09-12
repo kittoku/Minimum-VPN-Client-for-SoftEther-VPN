@@ -332,23 +332,13 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
         }
     }
 
-    private fun generateKeepAliveInterval(): Long {
-        return (TCP_KEEP_ALIVE_MIN_INTERVAL + bridge.random.nextInt(TCP_KEEP_ALIVE_INTERVAL_DIFF)).toLong()
-    }
-
     internal fun launchJobKeepAlive() {
         jobKeepAlive = bridge.scope.launch {
-            var nextTime: Long = 0
-
             while (isActive) {
-                val currentTime = System.currentTimeMillis()
+                sendKeepAlive()
 
-                if (currentTime >= nextTime) {
-                    sendKeepAlive()
-
-                    nextTime = System.currentTimeMillis() + generateKeepAliveInterval()
-                } else {
-                    delay(nextTime - currentTime)
+                (TCP_KEEP_ALIVE_MIN_INTERVAL + bridge.random.nextInt(TCP_KEEP_ALIVE_INTERVAL_DIFF)).toLong().also {
+                    delay(it)
                 }
             }
         }
