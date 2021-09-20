@@ -12,3 +12,5 @@ internal val HTTP_DETECT_BODY = """<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0/
     |</HEAD><BODY>
     |<H1>Forbidden</H1>
     |You don't have permission to access """.trimMargin().replace("\n", "\r\n")
+
+internal const val UDP_ACCELERATION_V2_KEY_SIZE = 128

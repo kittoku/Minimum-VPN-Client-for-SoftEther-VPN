@@ -12,6 +12,7 @@ internal enum class MvcPreference {
     SSL_VERSION,
     SSL_DO_SELECT_SUITES,
     SSL_SUITES,
+    UDP_ENABLE_ACCELERATION,
     MAC_ADDRESS,
     LOG_DO_SAVE_LOG,
     LOG_DIRECTORY,

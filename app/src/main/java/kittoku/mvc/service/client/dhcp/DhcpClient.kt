@@ -25,7 +25,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 internal class DhcpClient(private val bridge: ClientBridge) {
     internal fun launchJobInitial() {
-        bridge.scope.launch {
+        bridge.scope.launch(bridge.handler) {
             while (isActive) {
                 val offer = startDiscoverOfferSequence(DHCP_RESEND_MESSAGE_TIMEOUT) ?: continue
                 val ack = startRequestAckSequence(offer, DHCP_RESEND_MESSAGE_TIMEOUT) ?: continue

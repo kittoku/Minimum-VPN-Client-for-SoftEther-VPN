@@ -11,6 +11,10 @@
         <kittoku.mvc.preference.custom.MacAddressPreference android:key="MAC_ADDRESS"/>
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="UDP Acceleration">
+        <kittoku.mvc.preference.custom.UDPEnableAcceleration android:key="UDP_ENABLE_ACCELERATION"/>
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="Log">
         <kittoku.mvc.preference.custom.LogDoSaveLogPreference android:key="LOG_DO_SAVE_LOG"/>
         <kittoku.mvc.preference.custom.LogDirectoryPreference android:key="LOG_DIRECTORY"/>

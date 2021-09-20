@@ -23,6 +23,11 @@ internal class SslDoSelectSuitesPreference(context: Context, attrs: AttributeSet
     override val preferenceTitle = "Enable Only Selected Cipher Suites"
 }
 
+internal class UDPEnableAcceleration(context: Context, attrs: AttributeSet) : EnableSwitchPreference(context, attrs) {
+    override val mvcPreference = MvcPreference.UDP_ENABLE_ACCELERATION
+    override val preferenceTitle = "Enable UDP Acceleration"
+}
+
 internal class LogDoSaveLogPreference(context: Context, attrs: AttributeSet) : EnableSwitchPreference(context, attrs) {
     override val mvcPreference = MvcPreference.LOG_DO_SAVE_LOG
     override val preferenceTitle = "Save Log"

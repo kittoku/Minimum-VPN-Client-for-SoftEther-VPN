@@ -52,3 +52,27 @@ internal class SepHalfConnection : SoftEtherIntProperty() {
 internal class SepError : SoftEtherIntProperty() {
     override val key = SEP_ERROR
 }
+
+internal class SepUDPVersion : SoftEtherIntProperty() {
+    override val key = SEP_UDP_VERSION
+}
+
+internal class SepUDPMaxVersion : SoftEtherIntProperty() {
+    override val key = SEP_UDP_MAX_VERSION
+}
+
+internal class SepUDPClientPort : SoftEtherIntProperty() {
+    override val key = SEP_UDP_CLIENT_PORT
+}
+
+internal class SepUDPServerPort : SoftEtherIntProperty() {
+    override val key = SEP_UDP_SERVER_PORT
+}
+
+internal class SepUDPClientCookie : SoftEtherIntProperty() {
+    override val key = SEP_UDP_CLIENT_COOKIE
+}
+
+internal class SepUDPServerCookie : SoftEtherIntProperty() {
+    override val key = SEP_UDP_SERVER_COOKIE
+}

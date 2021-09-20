@@ -27,6 +27,21 @@ internal class PropertyPack : DataUnit {
     internal var sepPenCore: SepPenCore? = null
     internal var sepError: SepError? = null
 
+    internal var sepUseUDPAcceleration: SepUseUDPAcceleration? = null
+    internal var sepUDPUseEncryption: SepUDPUseEncryption? = null
+    internal var sepUDPVersion: SepUDPVersion? = null
+    internal var sepUDPMaxVersion: SepUDPMaxVersion? = null
+    internal var sepUDPClientIP: SepUDPClientIP? = null
+    internal var sepUDPClientPort: SepUDPClientPort? = null
+    internal var sepUDPClientKeyV2: SepUDPClientKeyV2? = null
+    internal var sepUDPClientCookie: SepUDPClientCookie? = null
+    internal var sepUDPServerIP: SepUDPServerIP? = null
+    internal var sepUDPServerPort: SepUDPServerPort? = null
+    internal var sepUDPServerKeyV2: SepUDPServerKeyV2? = null
+    internal var sepUDPServerCookie: SepUDPServerCookie? = null
+    internal var sepUDPSupportFastDisconnectDetect: SepUDPSupportFastDisconnectDetect? = null
+    internal var sepUDPEnableFastDisconnectDetect: SepUDPEnableFastDisconnectDetect? = null
+
     override val length: Int
         get() = Int.SIZE_BYTES + validProperties.map { it.length }.sum()
 
@@ -78,6 +93,22 @@ internal class PropertyPack : DataUnit {
                 SEP_RANDOM -> importProperty(SepRandom(), buffer)
                 SEP_PEN_CORE -> importProperty(SepPenCore(), buffer)
                 SEP_ERROR -> importProperty(SepError(), buffer)
+
+                SEP_USE_UDP_ACCELERATION -> importProperty(SepUseUDPAcceleration(), buffer)
+                SEP_UDP_USE_ENCRYPTION -> importProperty(SepUDPUseEncryption(), buffer)
+                SEP_UDP_VERSION -> importProperty(SepUDPVersion(), buffer)
+                SEP_UDP_MAX_VERSION -> importProperty(SepUDPMaxVersion(), buffer)
+                SEP_UDP_CLIENT_IP -> importProperty(SepUDPClientIP(), buffer)
+                SEP_UDP_CLIENT_PORT -> importProperty(SepUDPClientPort(), buffer)
+                SEP_UDP_CLIENT_KEY_V2 -> importProperty(SepUDPClientKeyV2(), buffer)
+                SEP_UDP_CLIENT_COOKIE -> importProperty(SepUDPClientCookie(), buffer)
+                SEP_UDP_SERVER_IP -> importProperty(SepUDPServerIP(), buffer)
+                SEP_UDP_SERVER_PORT -> importProperty(SepUDPServerPort(), buffer)
+                SEP_UDP_SERVER_KEY_V2 -> importProperty(SepUDPServerKeyV2(), buffer)
+                SEP_UDP_SERVER_COOKIE -> importProperty(SepUDPServerCookie(), buffer)
+                SEP_UDP_SUPPORT_FAST_DISCONNECT_DETECT -> importProperty(SepUDPSupportFastDisconnectDetect(), buffer)
+                SEP_UDP_ENABLE_FAST_DISCONNECT_DETECT -> importProperty(SepUDPEnableFastDisconnectDetect(), buffer)
+
                 else -> {
                     unknownPropertyKeys.add(key)
                     discardProperty(buffer)

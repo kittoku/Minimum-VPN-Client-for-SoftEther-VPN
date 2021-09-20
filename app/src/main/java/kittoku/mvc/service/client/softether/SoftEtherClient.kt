@@ -8,10 +8,14 @@ import kittoku.mvc.extension.read
 import kittoku.mvc.hash.hashSha0
 import kittoku.mvc.service.client.ClientBridge
 import kittoku.mvc.service.client.ControlMessage
+import kittoku.mvc.service.teminal.udp.CHACHA20_POLY1305_KEY_SIZE
+import kittoku.mvc.service.teminal.udp.UDP_CIPHER_ALGORITHM
 import kittoku.mvc.unit.http.HttpMessage
 import kittoku.mvc.unit.property.*
 import kotlinx.coroutines.launch
+import java.net.Inet4Address
 import java.nio.ByteBuffer
+import javax.crypto.spec.SecretKeySpec
 
 
 internal class SoftEtherClient(private val bridge: ClientBridge) {
@@ -114,6 +118,23 @@ internal class SoftEtherClient(private val bridge: ClientBridge) {
             it.value = bridge.random.nextBytes(randomSize)
         }
 
+        bridge.udpAccelerationConfig?.also { config ->
+            properties.sepUseUDPAcceleration = SepUseUDPAcceleration().also { it.value = true }
+            properties.sepUDPVersion = SepUDPVersion().also { it.value = 2 }
+            properties.sepUDPMaxVersion = SepUDPMaxVersion().also { it.value = 2 }
+            properties.sepUDPClientIP = SepUDPClientIP().also { it.value.read(config.clientReportedAddress.address) }
+            properties.sepUDPClientPort = SepUDPClientPort().also { it.value = config.clientReportedPort }
+            properties.sepUDPSupportFastDisconnectDetect = SepUDPSupportFastDisconnectDetect().also { it.value = true }
+            properties.sepUDPClientKeyV2 = SepUDPClientKeyV2().also {
+                val key = bridge.random.nextBytes(UDP_ACCELERATION_V2_KEY_SIZE)
+                it.value = key
+
+                val array = ByteArray(CHACHA20_POLY1305_KEY_SIZE)
+                array.read(key)
+                config.clientKey = SecretKeySpec(array, UDP_CIPHER_ALGORITHM)
+            }
+        }
+
         val buffer = ByteBuffer.allocate(properties.length)
         properties.write(buffer)
 
@@ -144,6 +165,38 @@ internal class SoftEtherClient(private val bridge: ClientBridge) {
         assertOrThrow(ErrorCode.SOFTETHER_AUTHENTICATION_FAILED) {
             assertAlways(response.header == HTTP_200_HEADER)
             assertAlways(pack.sepError == null)
+        }
+
+        bridge.udpAccelerationConfig?.also { config ->
+            assertOrThrow(ErrorCode.UDP_INVALID_CONFIGURATION_ASSIGNED) {
+                // notify disabled denied
+                assertAlways(pack.sepUDPVersion?.value == 2)
+                assertAlways(pack.sepUDPUseEncryption?.value == true)
+                assertAlways(pack.sepUDPEnableFastDisconnectDetect?.value == true)
+
+                pack.sepUDPClientCookie?.also {
+                    config.clientCookie = it.value
+                } ?: throw AssertionError()
+
+                pack.sepUDPServerIP?.also {
+                    config.serverReportedAddress = Inet4Address.getByAddress(it.value) as Inet4Address
+                } ?: throw AssertionError()
+
+                pack.sepUDPServerPort?.also {
+                    config.serverReportedPort = it.value
+                } ?: throw AssertionError()
+
+                pack.sepUDPServerCookie?.also {
+                    config.serverCookie = it.value
+                } ?: throw AssertionError()
+
+                pack.sepUDPServerKeyV2?.value?.also {
+                    val array = ByteArray(CHACHA20_POLY1305_KEY_SIZE)
+                    array.read(it)
+                    config.serverKey = SecretKeySpec(array, UDP_CIPHER_ALGORITHM)
+                } ?: throw AssertionError()
+
+            }
         }
     }
 }

@@ -19,6 +19,8 @@ import kittoku.mvc.service.client.stateless.LogWriter
 import kittoku.mvc.service.client.stateless.NetworkObserver
 import kittoku.mvc.service.teminal.ip.IPTerminal
 import kittoku.mvc.service.teminal.tcp.TCPTerminal
+import kittoku.mvc.service.teminal.udp.UDPStatus
+import kittoku.mvc.service.teminal.udp.UDPTerminal
 import kittoku.mvc.unit.ethernet.*
 import kittoku.mvc.unit.http.HttpMessage
 import kotlinx.coroutines.*
@@ -29,6 +31,8 @@ import kotlinx.coroutines.sync.withLock
 internal class ControlClient(private val bridge: ClientBridge) {
     private lateinit var tcpTerminal: TCPTerminal
     private lateinit var ipTerminal: IPTerminal
+    private var udpTerminal: UDPTerminal? = null
+
     private lateinit var networkObserver: NetworkObserver
     private var logWriter: LogWriter? = null
 
@@ -41,7 +45,8 @@ internal class ControlClient(private val bridge: ClientBridge) {
     private var isClosing = false
     private val mutex = Mutex()
 
-    private lateinit var jobIncoming: Job
+    private lateinit var jobTCPIncoming: Job
+    private lateinit var jobUDPIncoming: Job
     private lateinit var jobOutgoing: Job
     private lateinit var jobControl: Job
 
@@ -50,15 +55,20 @@ internal class ControlClient(private val bridge: ClientBridge) {
             logWriter = LogWriter(bridge)
         }
 
-        launchJobIncoming()
+        launchJobTCPIncoming()
     }
 
-    private fun launchJobIncoming() {
-        jobIncoming = bridge.scope.launch(bridge.handler) {
+    private fun launchJobTCPIncoming() {
+        jobTCPIncoming = bridge.scope.launch(bridge.handler) {
             logWriter?.report("Connecting has been attempted")
 
-            tcpTerminal = TCPTerminal(bridge).also { it.createSocket() }
-            tcpTerminal.setTimeoutForControl()
+            tcpTerminal = TCPTerminal(bridge)
+
+            bridge.udpAccelerationConfig?.also {
+                it.initializeNATTAddress()
+                udpTerminal = UDPTerminal(bridge)
+            }
+
             ipTerminal = IPTerminal(bridge)
 
 
@@ -123,10 +133,12 @@ internal class ControlClient(private val bridge: ClientBridge) {
 
             // Establish VPN connection
             tcpTerminal.setTimeoutForData()
-            tcpTerminal.protectSocket()
             ipTerminal.initializeBuilder()
             ipTerminal.launchJobRetrieve()
             launchJobOutgoing()
+            bridge.udpAccelerationConfig?.also {
+                launchJobUDPIncoming()
+            }
 
             logWriter?.report("VPN connection has been established")
 
@@ -140,21 +152,38 @@ internal class ControlClient(private val bridge: ClientBridge) {
         }
     }
 
+    private fun launchJobUDPIncoming() {
+        jobUDPIncoming = bridge.scope.launch(bridge.handler) {
+            udpTerminal!!.launchJobKeepAlive()
+            udpTerminal!!.launchJobInquireNATT()
+
+            while (isActive) {
+                udpTerminal!!.receivePacket().also {
+                    ipTerminal.feedIncomingPacket(it)
+                }
+            }
+        }
+    }
+
     private fun launchJobOutgoing() {
         jobOutgoing = bridge.scope.launch(bridge.handler) {
             while (isActive) {
-                ipTerminal.waitOutgoingPacket().also {
-                    tcpTerminal.loadOutgoingPacket(it)
+                val firstPacket = ipTerminal.waitOutgoingPacket()
+
+                if (udpTerminal?.status == UDPStatus.OPEN) {
+                    udpTerminal?.sendData(firstPacket)
+                } else {
+                    tcpTerminal.loadOutgoingPacket(firstPacket)
+
+                    while (isActive) {
+                        val polled = ipTerminal.pollOutgoingPacket() ?: break
+
+                        val isAddable = tcpTerminal.addOutGoingPacket(polled)
+                        if (!isAddable) break
+                    }
+
+                    tcpTerminal.sendOutgoingPacket()
                 }
-
-                while (isActive) {
-                    val polled = ipTerminal.pollOutgoingPacket() ?: break
-
-                    val isAddable = tcpTerminal.addOutGoingPacket(polled)
-                    if (!isAddable) break
-                }
-
-                tcpTerminal.sendOutgoingPacket()
             }
         }
     }
@@ -242,7 +271,8 @@ internal class ControlClient(private val bridge: ClientBridge) {
                     if (::networkObserver.isInitialized) networkObserver.close()
 
                     if (::jobControl.isInitialized) jobControl.cancel()
-                    if (::jobIncoming.isInitialized) jobIncoming.cancel()
+                    if (::jobTCPIncoming.isInitialized) jobTCPIncoming.cancel()
+                    if (::jobUDPIncoming.isInitialized) jobUDPIncoming.cancel()
                     if (::jobOutgoing.isInitialized) jobOutgoing.cancel()
 
                     PreferenceManager.getDefaultSharedPreferences(bridge.service).also {

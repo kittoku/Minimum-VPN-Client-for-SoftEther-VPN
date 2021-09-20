@@ -5,18 +5,16 @@ import kittoku.mvc.debug.MvcException
 import kittoku.mvc.debug.assertAlways
 import kittoku.mvc.debug.assertOrThrow
 import kittoku.mvc.extension.capacityAfterPayload
-import kittoku.mvc.extension.isSame
 import kittoku.mvc.extension.move
 import kittoku.mvc.service.client.ClientBridge
 import kittoku.mvc.service.client.ControlMessage
 import kittoku.mvc.service.client.ETHERNET_MTU
-import kittoku.mvc.service.client.UDP_PORT_ECHO
-import kittoku.mvc.unit.ethernet.ETHERNET_BROADCAST_ADDRESS
+import kittoku.mvc.service.teminal.isEchoFrame
+import kittoku.mvc.service.teminal.isToMeFrame
 import kittoku.mvc.unit.ethernet.ETHERNET_MAC_ADDRESS_SIZE
 import kittoku.mvc.unit.ethernet.ETHER_TYPE_IPv4
 import kittoku.mvc.unit.ethernet.EthernetFrame
 import kittoku.mvc.unit.http.HttpMessage
-import kittoku.mvc.unit.ip.IP_PROTOCOL_UDP
 import kittoku.mvc.unit.keepalive.KEEP_ALIVE_FRAME_NUM
 import kittoku.mvc.unit.keepalive.KeepAlivePacket
 import kotlinx.coroutines.*
@@ -30,7 +28,7 @@ import javax.net.ssl.SSLSocketFactory
 
 
 internal class TCPTerminal(private val bridge: ClientBridge) {
-    private lateinit var socket: SSLSocket
+    private val socket: SSLSocket
     private lateinit var jobKeepAlive: Job
 
     private val incomingBuffer = ByteBuffer.allocate(16384).also {
@@ -45,7 +43,7 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
 
     private val mutex = Mutex()
 
-    internal fun createSocket() {
+    init {
         val socketFactory = SSLSocketFactory.getDefault()
 
         socket = socketFactory.createSocket(bridge.serverHostname, bridge.serverPort) as SSLSocket
@@ -62,18 +60,24 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
         }
 
         socket.startHandshake()
-    }
-
-    internal fun protectSocket() {
+        socket.soTimeout = CONTROL_UNIT_WAIT_TIMEOUT
         bridge.service.protect(socket)
     }
 
-    internal fun setTimeoutForControl() {
-        socket.soTimeout = CONTROL_UNIT_WAIT_TIMEOUT.toInt()
+    internal fun setTimeoutForData() {
+        socket.soTimeout = DATA_UNIT_WAIT_TIMEOUT
     }
 
-    internal fun setTimeoutForData() {
-        socket.soTimeout = DATA_UNIT_WAIT_TIMEOUT.toInt()
+    internal fun launchJobKeepAlive() {
+        jobKeepAlive = bridge.scope.launch(bridge.handler) {
+            while (isActive) {
+                sendKeepAlive()
+
+                (TCP_KEEP_ALIVE_MIN_INTERVAL + bridge.random.nextInt(TCP_KEEP_ALIVE_INTERVAL_DIFF)).toLong().also {
+                    delay(it)
+                }
+            }
+        }
     }
 
     private suspend fun sendStream(buffer: ByteBuffer) {
@@ -117,6 +121,41 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
         }
 
         receiveStream(buffer)
+    }
+
+    internal suspend fun sendFrame(frame: EthernetFrame) {
+        val buffer = ByteBuffer.allocate(2 * Int.SIZE_BYTES + frame.length)
+        buffer.clear()
+        buffer.putInt(1)
+        buffer.putInt(frame.length)
+        frame.write(buffer)
+        buffer.flip()
+        sendStream(buffer)
+    }
+
+    private suspend fun sendKeepAlive() {
+        val packet = KeepAlivePacket().also {
+            it.nattAddress = bridge.udpAccelerationConfig?.clientNATTAddress
+            it.nattPort = bridge.udpAccelerationConfig?.clientNATTPort ?: 0
+            it.preparePacket(bridge.random)
+        }
+
+        val buffer = ByteBuffer.allocate(packet.length)
+        buffer.clear()
+        packet.write(buffer)
+        buffer.flip()
+        sendStream(buffer)
+    }
+
+    internal suspend fun sendHttpMessage(message: HttpMessage) {
+        if (::jobKeepAlive.isInitialized) {
+            throw NotImplementedError()
+        }
+
+        outgoingBuffer.clear()
+        message.write(outgoingBuffer)
+        outgoingBuffer.flip()
+        sendStream(outgoingBuffer)
     }
 
     internal suspend fun receiveHttpMessage(): HttpMessage {
@@ -188,10 +227,26 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
         }
 
         return if (isKeepAlive) {
+            bridge.udpAccelerationConfig?.also {
+                incomingBuffer.reset()
+                KeepAlivePacket().also { packet ->
+                    packet.read(incomingBuffer)
+                    packet.extractNATTInfo()
+
+                    if (packet.nattPort != 0) {
+                        it.serverNATTPort = packet.nattPort
+                    }
+
+                    packet.nattAddress?.also { address ->
+                        it.serverNATTAddress = address
+                    }
+                }
+            }
+
             0
         } else {
             incomingBuffer.reset()
-            return frameNum
+            frameNum
         }
     }
 
@@ -258,45 +313,6 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
         }
     }
 
-    private fun isToMeFrame(buffer: ByteBuffer): Boolean {
-        // start with Ethernet frame header, consume
-        buffer.get(macAddressHolder)
-
-        if (macAddressHolder.isSame(bridge.clientMacAddress)) {
-            return true
-        }
-
-        if (macAddressHolder.isSame(ETHERNET_BROADCAST_ADDRESS)) {
-            return true
-        }
-
-        return false
-    }
-
-    private fun isEcho(buffer: ByteBuffer): Boolean {
-        // start with IP Header, don't consume
-        if (buffer.remaining() < 24) { // 24 = d(IPHeaderStart, UDPPortStop)
-            return false
-        }
-
-        val protocolIndex = buffer.position() + 9
-        if (buffer.get(protocolIndex) != IP_PROTOCOL_UDP) {
-            return false
-        }
-
-        val srcPortIndex = protocolIndex + 11
-        if (buffer.getShort(srcPortIndex) != UDP_PORT_ECHO) {
-            return false
-        }
-
-        val dstPortIndex = srcPortIndex + 2
-        if (buffer.getShort(dstPortIndex) != UDP_PORT_ECHO) {
-            return false
-        }
-
-        return true
-    }
-
     internal suspend fun consumeIPPacketBuffer(body: suspend (ByteBuffer) -> Unit) {
         consumeFramePack {
             // avoid instantiating EthernetFrame for performance
@@ -307,7 +323,9 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
             incomingBuffer.limit(stopFrame) // avoid frame reading beyond expected length
 
 
-            if (!isToMeFrame(incomingBuffer)) {
+            if (isToMeFrame(incomingBuffer, bridge.clientMacAddress)) {
+                incomingBuffer.move(ETHERNET_MAC_ADDRESS_SIZE)
+            } else {
                 incomingBuffer.position(stopFrame) // discard frame
                 incomingBuffer.limit(currentLimit)
                 return@consumeFramePack
@@ -321,7 +339,7 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
                 return@consumeFramePack
             }
 
-            if (isEcho(incomingBuffer)) {
+            if (isEchoFrame(incomingBuffer)) {
                 // send ARP Replay anyway
                 bridge.controlMailbox.send(ControlMessage.SECURE_NAT_ECHO_REQUEST)
             }
@@ -330,50 +348,6 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
 
             incomingBuffer.limit(currentLimit)
         }
-    }
-
-    internal fun launchJobKeepAlive() {
-        jobKeepAlive = bridge.scope.launch {
-            while (isActive) {
-                sendKeepAlive()
-
-                (TCP_KEEP_ALIVE_MIN_INTERVAL + bridge.random.nextInt(TCP_KEEP_ALIVE_INTERVAL_DIFF)).toLong().also {
-                    delay(it)
-                }
-            }
-        }
-    }
-
-    internal suspend fun sendHttpMessage(message: HttpMessage) {
-        if (::jobKeepAlive.isInitialized) {
-            throw NotImplementedError()
-        }
-
-        outgoingBuffer.clear()
-        message.write(outgoingBuffer)
-        outgoingBuffer.flip()
-        sendStream(outgoingBuffer)
-    }
-
-    internal suspend fun sendFrame(frame: EthernetFrame) {
-        val buffer = ByteBuffer.allocate(2 * Int.SIZE_BYTES + frame.length)
-        buffer.clear()
-        buffer.putInt(1)
-        buffer.putInt(frame.length)
-        frame.write(buffer)
-        buffer.flip()
-        sendStream(buffer)
-    }
-
-    private suspend fun sendKeepAlive() {
-        val packet = KeepAlivePacket()
-        packet.importRandomBytes(bridge.random)
-
-        val buffer = ByteBuffer.allocate(2 * Int.SIZE_BYTES + packet.length)
-        buffer.clear()
-        packet.write(buffer)
-        buffer.flip()
-        sendStream(buffer)
     }
 
     internal fun loadOutgoingPacket(buffer: ByteBuffer) {
@@ -402,6 +376,6 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
 
     internal fun close() {
         if (::jobKeepAlive.isInitialized) jobKeepAlive.cancel()
-        if (::socket.isInitialized) socket.close()
+        socket.close()
     }
 }

@@ -38,3 +38,11 @@ internal open class SoftEtherBytesProperty : SoftEtherProperty() {
 internal class SepPenCore : SoftEtherBytesProperty() {
     override val key = SEP_PEN_CORE
 }
+
+internal class SepUDPClientKeyV2 : SoftEtherBytesProperty() {
+    override val key = SEP_UDP_CLIENT_KEY_V2
+}
+
+internal class SepUDPServerKeyV2 : SoftEtherBytesProperty() {
+    override val key = SEP_UDP_SERVER_KEY_V2
+}

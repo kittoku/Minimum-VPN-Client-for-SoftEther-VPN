@@ -3,6 +3,7 @@ package kittoku.mvc.extension
 import kittoku.mvc.unit.ip.IPv4_ADDRESS_SIZE
 import java.net.InetAddress
 import java.nio.ByteBuffer
+import java.nio.charset.Charset
 
 
 internal fun ByteArray.isSame(other: ByteArray): Boolean {
@@ -13,6 +14,32 @@ internal fun ByteArray.isSame(other: ByteArray): Boolean {
     }
 
     return true
+}
+
+internal fun ByteArray.match(pattern: ByteArray, offset: Int=0): Boolean {
+    if (pattern.size > this.size - offset) return false
+
+    for (i in pattern.indices) {
+        if (this[i + offset] != pattern[i]) return false
+    }
+
+    return true
+}
+
+internal fun ByteArray.search(pattern: ByteArray): Int {
+    val diff = this.size - pattern.size
+
+    if (diff < 0) return -1
+
+    outer@ for (i in 0..diff) {
+        for (j in pattern.indices) {
+            if (this[i + j] != pattern[j]) continue@outer
+        }
+
+        return i
+    }
+
+    return -1
 }
 
 internal fun ByteArray.copy(): ByteArray {
@@ -42,6 +69,14 @@ internal fun ByteArray.toBroadcastAddress(subnetMask: ByteArray): ByteArray {
     result.putInt((thisAsInt and maskAsInt) or maskAsInt.inv())
 
     return result.array()
+}
+
+internal fun ByteArray.toStringOrNull(charset: Charset): String? {
+    try {
+        return toString(charset)
+    } catch (_: Exception) {}
+
+    return null
 }
 
 internal fun ByteArray.toHexString(parse: Boolean = false): String {

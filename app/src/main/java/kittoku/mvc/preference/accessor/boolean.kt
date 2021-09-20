@@ -8,6 +8,7 @@ internal fun getBooleanPrefValue(key: MvcPreference, prefs: SharedPreferences): 
     val defaultValue = when (key) {
         MvcPreference.HOME_CONNECTOR,
         MvcPreference.SSL_DO_SELECT_SUITES,
+        MvcPreference.UDP_ENABLE_ACCELERATION,
         MvcPreference.LOG_DO_SAVE_LOG -> false
         else -> throw NotImplementedError()
     }

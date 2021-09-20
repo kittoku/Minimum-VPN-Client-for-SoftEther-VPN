@@ -11,6 +11,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -25,6 +27,8 @@ internal class IPTerminal(private val bridge: ClientBridge) {
 
     private lateinit var jobRetrieve: Job
     private val retrieveChannel = Channel<ByteBuffer>(0)
+
+    private val mutex = Mutex()
 
     internal fun initializeBuilder() {
         val builder = bridge.service.Builder()
@@ -87,11 +91,13 @@ internal class IPTerminal(private val bridge: ClientBridge) {
 
     internal fun pollOutgoingPacket() = retrieveChannel.poll()
 
-    internal fun feedIncomingPacket(buffer: ByteBuffer) {
-        outputStream.write(buffer.array(), buffer.position(), buffer.remaining())
-        outputStream.flush()
+    internal suspend fun feedIncomingPacket(buffer: ByteBuffer) {
+        mutex.withLock {
+            outputStream.write(buffer.array(), buffer.position(), buffer.remaining())
+            outputStream.flush()
 
-        buffer.position(buffer.limit())
+            buffer.position(buffer.limit())
+        }
     }
 
     internal fun close() {

@@ -1,12 +1,12 @@
 package kittoku.mvc
 
-import kittoku.mvc.extension.isSame
-import kittoku.mvc.extension.read
-import kittoku.mvc.extension.toHexByteArray
-import kittoku.mvc.extension.toHexString
+import kittoku.mvc.extension.*
 import kittoku.mvc.hash.hashSha0
 import kittoku.mvc.service.client.ClientBridge
 import kittoku.mvc.service.client.ControlClient
+import kittoku.mvc.service.client.UDPAccelerationConfig
+import kittoku.mvc.service.teminal.udp.UDP_NATT_IP_REGEX
+import kittoku.mvc.service.teminal.udp.UDP_NATT_PORT_REGEX
 import kittoku.mvc.unit.ip.IPv4Packet
 import kittoku.mvc.unit.udp.UDPDatagram
 import kotlinx.coroutines.*
@@ -47,6 +47,18 @@ class MvcTest {
     fun testControlClient() {
         runBlocking {
             val bridge = createTestBridge(CoroutineScope(Dispatchers.IO + SupervisorJob()))
+            val client = ControlClient(bridge)
+
+            client.run()
+            delay(10_000)
+        }
+    }
+
+    @Test
+    fun testControlClientUDP() {
+        runBlocking {
+            val bridge = createTestBridge(CoroutineScope(Dispatchers.IO + SupervisorJob()))
+            bridge.udpAccelerationConfig = UDPAccelerationConfig(bridge.random)
             val client = ControlClient(bridge)
 
             client.run()
@@ -165,5 +177,37 @@ class MvcTest {
 
             writeReadIPv4Packet(it)
         }
+    }
+
+    @Test
+    fun testNATTRegex() {
+        val text = "IP=192.168.0.1,PORT=11235"
+        val expectedIP = "IP=192.168.0.1"
+        val expectedPort = "PORT=11235"
+
+        val regexIP = Regex(UDP_NATT_IP_REGEX)
+        regexIP.find(text)!!.also {
+            assert(it.value == expectedIP)
+        }
+
+        val regexPort = Regex(UDP_NATT_PORT_REGEX)
+        regexPort.find(text)!!.also {
+            assert(it.value == expectedPort)
+        }
+    }
+
+    @Test
+    fun testByteArraySearch() {
+        val array = "ABCDEFG".toByteArray(Charsets.US_ASCII)
+
+        val pattern0 = "ABCDEFGH".toByteArray(Charsets.US_ASCII)
+        val pattern1 = "DEF".toByteArray(Charsets.US_ASCII)
+        val pattern2 = "XYZ".toByteArray(Charsets.US_ASCII)
+        val pattern3 = "GH".toByteArray(Charsets.US_ASCII)
+
+        assert(array.search(pattern0) == -1)
+        assert(array.search(pattern1) == 3)
+        assert(array.search(pattern2) == -1)
+        assert(array.search(pattern3) == -1)
     }
 }

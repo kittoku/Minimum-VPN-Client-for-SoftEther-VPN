@@ -22,7 +22,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 internal class ARPClient(private val bridge: ClientBridge) {
     internal fun launchJobInitial() { // resolve default gateway MAC address
-        bridge.scope.launch {
+        bridge.scope.launch(bridge.handler) {
             while (isActive) {
                 val reply = startResolveDefaultGatewaySequence(DHCP_RESEND_MESSAGE_TIMEOUT) ?: continue
 
@@ -38,7 +38,7 @@ internal class ARPClient(private val bridge: ClientBridge) {
     }
 
     internal fun launchReplyBeacon() {
-        bridge.scope.launch {
+        bridge.scope.launch(bridge.handler) {
             val packet = ARPPacket().also {
                 it.opcode = ARP_OPCODE_REPLY
                 it.senderIp.read(bridge.assignedIpAddress)

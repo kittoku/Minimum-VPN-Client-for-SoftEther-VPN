@@ -17,7 +17,9 @@ import kittoku.mvc.unit.ip.IPv4_ADDRESS_SIZE
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import java.net.Inet4Address
 import java.security.SecureRandom
+import javax.crypto.SecretKey
 
 
 internal enum class ControlMessage {
@@ -25,6 +27,70 @@ internal enum class ControlMessage {
     DHCP_NEGOTIATION_FINISHED,
     ARP_NEGOTIATION_FINISHED,
     SECURE_NAT_ECHO_REQUEST,
+}
+
+internal class UDPAccelerationConfig(random: SecureRandom) {
+    internal lateinit var clientReportedAddress: Inet4Address
+    internal var clientNATTAddress: Inet4Address? = null
+    internal var clientReportedPort = 0
+    internal var clientNATTPort = 0
+    internal var clientCookie = 0
+    internal lateinit var clientKey: SecretKey
+
+    internal var serverCurrentAddress: Inet4Address? = null
+    internal lateinit var serverReportedAddress: Inet4Address
+    internal var serverNATTAddress: Inet4Address? = null
+    internal var serverCurrentPort = 0
+    internal var serverReportedPort = 0
+    internal var serverNATTPort = 0
+    internal var serverCookie = 0
+    internal lateinit var serverKey: SecretKey
+
+    private val nattHostname: String
+    internal lateinit var nattAddress: Inet4Address
+
+    internal val validServerPorts: List<Int>
+        get() = mutableListOf<Int>().also {
+            if (serverCurrentPort != 0) {
+                it.add(serverCurrentPort)
+            }
+
+            if (serverReportedPort != 0 && serverReportedPort != serverCurrentPort) {
+                it.add(serverReportedPort)
+            }
+
+            if (serverNATTPort != 0 && serverNATTPort != serverCurrentPort && serverNATTPort != serverReportedPort) {
+                it.add(serverNATTPort)
+            }
+        }
+
+    internal val validServerAddresses: List<Inet4Address>
+        get() = mutableListOf<Inet4Address>().also { list ->
+            serverCurrentAddress?.also {
+                list.add(it)
+            }
+
+            serverReportedAddress.also {
+                if (it != serverCurrentAddress) {
+                    list.add(it)
+                }
+            }
+
+            serverNATTAddress?.also {
+                if (it != serverCurrentAddress && it != serverReportedAddress) {
+                    list.add(it)
+                }
+            }
+        }
+
+    init {
+        val hex = random.nextBytes(1).toHexString().lowercase()
+        nattHostname = "x${hex[0]}.x${hex[1]}.dev.servers.nat-traversal.softether-network.net"
+    }
+
+    internal fun initializeNATTAddress() {
+        nattAddress = Inet4Address.getByName(nattHostname) as Inet4Address
+    }
 }
 
 internal class ClientBridge(internal val scope: CoroutineScope, internal val handler: CoroutineExceptionHandler) {
@@ -43,6 +109,8 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
     internal var sslVersion = "DEFAULT"
     internal var doSelectCipherSuites = false
     internal val selectedCipherSuites = mutableListOf<String>()
+
+    internal var udpAccelerationConfig: UDPAccelerationConfig? = null
 
     internal val assignedIpAddress = ByteArray(IPv4_ADDRESS_SIZE)
     internal val subnetMask = ByteArray(IPv4_ADDRESS_SIZE)
@@ -76,6 +144,10 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
         selectedCipherSuites.clear()
         if (doSelectCipherSuites) {
             getSetPrefValue(MvcPreference.SSL_SUITES, prefs).forEach { selectedCipherSuites.add(it) }
+        }
+
+        if (getBooleanPrefValue(MvcPreference.UDP_ENABLE_ACCELERATION, prefs)) {
+            udpAccelerationConfig = UDPAccelerationConfig(random)
         }
 
         isLogEnabled = getBooleanPrefValue(MvcPreference.LOG_DO_SAVE_LOG, prefs)
