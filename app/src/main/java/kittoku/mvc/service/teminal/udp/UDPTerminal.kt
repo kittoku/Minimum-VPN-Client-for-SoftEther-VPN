@@ -7,7 +7,6 @@ import kittoku.mvc.service.client.ClientBridge
 import kittoku.mvc.service.client.ControlMessage
 import kittoku.mvc.service.teminal.isEchoFrame
 import kittoku.mvc.service.teminal.isToMeFrame
-import kittoku.mvc.service.teminal.tcp.DATA_UNIT_WAIT_TIMEOUT
 import kittoku.mvc.unit.ethernet.ETHERNET_MAC_ADDRESS_SIZE
 import kittoku.mvc.unit.ethernet.ETHER_TYPE_IPv4
 import kotlinx.coroutines.*
@@ -74,7 +73,7 @@ internal class UDPTerminal(private val bridge: ClientBridge) {
         config.clientReportedAddress = address
         config.clientReportedPort = socket.localPort
 
-        socket.soTimeout = DATA_UNIT_WAIT_TIMEOUT
+        socket.soTimeout = UDP_KEEP_ALIVE_MIN_INTERVAL
 
         bridge.service.protect(socket)
     }
@@ -288,5 +287,11 @@ internal class UDPTerminal(private val bridge: ClientBridge) {
 
             return decryptBuffer
         }
+    }
+
+    internal fun close() {
+        if (::jobKeepAlive.isInitialized) jobKeepAlive.cancel()
+        if (::jobInquireNATT.isInitialized) jobInquireNATT.cancel()
+        socket.close()
     }
 }

@@ -45,21 +45,22 @@ internal class ControlClient(private val bridge: ClientBridge) {
     private var isClosing = false
     private val mutex = Mutex()
 
+    private lateinit var jobMain: Job
+    private lateinit var jobControlUnit: Job
     private lateinit var jobTCPIncoming: Job
     private lateinit var jobUDPIncoming: Job
     private lateinit var jobOutgoing: Job
-    private lateinit var jobControl: Job
 
     internal fun run() {
         if (bridge.isLogEnabled && bridge.logDirectory != null) {
             logWriter = LogWriter(bridge)
         }
 
-        launchJobTCPIncoming()
+        launchJobMain()
     }
 
-    private fun launchJobTCPIncoming() {
-        jobTCPIncoming = bridge.scope.launch(bridge.handler) {
+    private fun launchJobMain() {
+        jobMain = bridge.scope.launch(bridge.handler) {
             logWriter?.report("Connecting has been attempted")
 
             tcpTerminal = TCPTerminal(bridge)
@@ -75,7 +76,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
             // SoftEther negotiation
             softEtherClient = SoftEtherClient(bridge).also { it.launchJobNegotiation() }
 
-            launchJobControl()
+            launchJobControlUnit()
 
             withTimeoutOrNull(SOFTETHER_NEGOTIATION_TIMEOUT) {
                 repeat(2) {
@@ -136,18 +137,48 @@ internal class ControlClient(private val bridge: ClientBridge) {
             ipTerminal.initializeBuilder()
             ipTerminal.launchJobRetrieve()
             launchJobOutgoing()
+            launchJobTCPIncoming()
             bridge.udpAccelerationConfig?.also {
                 launchJobUDPIncoming()
             }
 
             logWriter?.report("VPN connection has been established")
 
-            while (isActive) {
-                if (mailbox.poll() == ControlMessage.SECURE_NAT_ECHO_REQUEST) {
-                    arpClient.launchReplyBeacon()
-                }
 
-                relayIPPacket()
+            // routine processing control messages
+            while (isActive) {
+                when (mailbox.receive()) {
+                    ControlMessage.SECURE_NAT_ECHO_REQUEST -> arpClient.launchReplyBeacon()
+                    else -> throw NotImplementedError()
+                }
+            }
+        }
+    }
+
+    private fun launchJobControlUnit() {
+        jobControlUnit = bridge.scope.launch(bridge.handler) {
+            while (isActive) {
+                when (val received = bridge.controlChannel.receive()) {
+                    is HttpMessage -> {
+                        tcpTerminal.sendHttpMessage(received)
+                    }
+
+                    is EthernetFrame -> {
+                        tcpTerminal.sendFrame(received)
+                    }
+
+                    else -> throw NotImplementedError()
+                }
+            }
+        }
+    }
+
+    private fun launchJobTCPIncoming() {
+        jobTCPIncoming = bridge.scope.launch(bridge.handler) {
+            while (isActive) {
+                tcpTerminal.consumeIPPacketBuffer {
+                    ipTerminal.feedIncomingPacket(it)
+                }
             }
         }
     }
@@ -188,24 +219,6 @@ internal class ControlClient(private val bridge: ClientBridge) {
         }
     }
 
-    private fun launchJobControl() {
-        jobControl = bridge.scope.launch(bridge.handler) {
-            while (isActive) {
-                when (val received = bridge.controlChannel.receive()) {
-                    is HttpMessage -> {
-                        tcpTerminal.sendHttpMessage(received)
-                    }
-
-                    is EthernetFrame -> {
-                        tcpTerminal.sendFrame(received)
-                    }
-
-                    else -> throw NotImplementedError()
-                }
-            }
-        }
-    }
-
     private suspend fun relaySoftEtherMessage() {
         val response = tcpTerminal.receiveHttpMessage()
         bridge.softEtherChannel.send(response)
@@ -224,12 +237,6 @@ internal class ControlClient(private val bridge: ClientBridge) {
             if (it.payloadARPPacket != null) {
                 bridge.arpChannel.send(it)
             }
-        }
-    }
-
-    private suspend fun relayIPPacket() {
-        tcpTerminal.consumeIPPacketBuffer {
-            ipTerminal.feedIncomingPacket(it)
         }
     }
 
@@ -267,10 +274,12 @@ internal class ControlClient(private val bridge: ClientBridge) {
                     isClosing = true
 
                     if (::tcpTerminal.isInitialized) tcpTerminal.close()
+                    udpTerminal?.close()
                     if (::ipTerminal.isInitialized) ipTerminal.close()
                     if (::networkObserver.isInitialized) networkObserver.close()
 
-                    if (::jobControl.isInitialized) jobControl.cancel()
+                    if (::jobMain.isInitialized) jobMain.cancel()
+                    if (::jobControlUnit.isInitialized) jobControlUnit.cancel()
                     if (::jobTCPIncoming.isInitialized) jobTCPIncoming.cancel()
                     if (::jobUDPIncoming.isInitialized) jobUDPIncoming.cancel()
                     if (::jobOutgoing.isInitialized) jobOutgoing.cancel()
