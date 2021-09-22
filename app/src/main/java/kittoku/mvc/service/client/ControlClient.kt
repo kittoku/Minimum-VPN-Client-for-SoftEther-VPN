@@ -198,23 +198,37 @@ internal class ControlClient(private val bridge: ClientBridge) {
 
     private fun launchJobOutgoing() {
         jobOutgoing = bridge.scope.launch(bridge.handler) {
+            var lastUDPStatus = UDPStatus.CLOSED
+
             while (isActive) {
                 val firstPacket = ipTerminal.waitOutgoingPacket()
 
-                if (udpTerminal?.status == UDPStatus.OPEN) {
-                    udpTerminal?.sendData(firstPacket)
-                } else {
-                    tcpTerminal.loadOutgoingPacket(firstPacket)
+                // send through UDP hole if possible
+                if (udpTerminal != null) {
+                    val currentUDPStatus = bridge.udpAccelerationConfig!!.status
 
-                    while (isActive) {
-                        val polled = ipTerminal.pollOutgoingPacket() ?: break
-
-                        val isAddable = tcpTerminal.addOutGoingPacket(polled)
-                        if (!isAddable) break
+                    if (currentUDPStatus != lastUDPStatus) {
+                        networkObserver.enforceUpdateSummary()
+                        lastUDPStatus = currentUDPStatus
                     }
 
-                    tcpTerminal.sendOutgoingPacket()
+                    if (currentUDPStatus == UDPStatus.OPEN) {
+                        udpTerminal!!.sendData(firstPacket)
+                        continue
+                    }
                 }
+
+                // finally TCP connection is needed
+                tcpTerminal.loadOutgoingPacket(firstPacket)
+
+                while (isActive) {
+                    val polled = ipTerminal.pollOutgoingPacket() ?: break
+
+                    val isAddable = tcpTerminal.addOutGoingPacket(polled)
+                    if (!isAddable) break
+                }
+
+                tcpTerminal.sendOutgoingPacket()
             }
         }
     }
@@ -294,6 +308,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
                     }
 
                     logWriter?.close()
+                    networkObserver.close()
 
                     bridge.service.stopForeground(true)
                     bridge.service.stopSelf()

@@ -42,10 +42,6 @@ internal class UDPTerminal(private val bridge: ClientBridge) {
     private val socketMutex = Mutex()
     private val packetMutex = Mutex()
 
-    private var _status = UDPStatus.CLOSED
-    internal val status: UDPStatus
-        get() = _status
-
     private val incomingPacket = DatagramPacket(ByteArray(UDP_BUFFER_SIZE), UDP_BUFFER_SIZE)
     private val outgoingPacket = DatagramPacket(ByteArray(UDP_BUFFER_SIZE), UDP_BUFFER_SIZE)
     private val nonceHolder = ByteArray(CHACHA20_POLY1305_NONCE_SIZE)
@@ -102,7 +98,7 @@ internal class UDPTerminal(private val bridge: ClientBridge) {
             while (isActive) {
                 sendPacket(packet)
 
-                val interval = if (status == UDPStatus.OPEN) {
+                val interval = if (config.status == UDPStatus.OPEN) {
                     UDP_NATT_INTERVAL_MIN + bridge.random.nextInt(UDP_NATT_INTERVAL_DIFF)
                 } else {
                     UDP_NATT_INTERVAL_INITIAL
@@ -164,7 +160,7 @@ internal class UDPTerminal(private val bridge: ClientBridge) {
                 outgoingPacket.length = CHACHA20_POLY1305_NONCE_SIZE + it
             }
 
-            if (status == UDPStatus.OPEN) {
+            if (config.status == UDPStatus.OPEN) {
                 // fast lane
                 outgoingPacket.address = config.serverCurrentAddress!!
                 outgoingPacket.port = config.serverCurrentPort
@@ -200,7 +196,7 @@ internal class UDPTerminal(private val bridge: ClientBridge) {
 
             val currentTime = System.currentTimeMillis()
             if (currentTime - lastReceivedTick > UDP_KEEP_ALIVE_TIMEOUT) {
-                _status = UDPStatus.CLOSED
+                config.status = UDPStatus.CLOSED
             }
 
             if (!expectPacket()) {
@@ -254,7 +250,7 @@ internal class UDPTerminal(private val bridge: ClientBridge) {
                 lastReceivedTick = currentTime
             }
 
-            _status = if (currentTime - lastReceivedTick > UDP_KEEP_ALIVE_TIMEOUT) {
+            config.status = if (currentTime - lastReceivedTick > UDP_KEEP_ALIVE_TIMEOUT) {
                 UDPStatus.CLOSED
             } else {
                 UDPStatus.OPEN

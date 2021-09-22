@@ -5,9 +5,10 @@ import androidx.preference.PreferenceManager
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.setStringPrefValue
 import kittoku.mvc.service.client.ClientBridge
+import kittoku.mvc.service.teminal.udp.UDPStatus
 
 
-internal class NetworkObserver(bridge: ClientBridge) {
+internal class NetworkObserver(val bridge: ClientBridge) {
     private val manager = bridge.service.getSystemService(ConnectivityManager::class.java)
     private val callback: ConnectivityManager.NetworkCallback
     private val prefs = PreferenceManager.getDefaultSharedPreferences(bridge.service)
@@ -23,16 +24,14 @@ internal class NetworkObserver(bridge: ClientBridge) {
 
         callback = object : ConnectivityManager.NetworkCallback() {
             override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
-                makeSummary(linkProperties).also {
-                    setStringPrefValue(it, MvcPreference.HOME_STATUS, prefs)
-                }
+                updateSummary(linkProperties)
             }
         }
 
         manager.registerNetworkCallback(request, callback)
     }
 
-    private fun makeSummary(properties: LinkProperties): String {
+    private fun updateSummary(properties: LinkProperties) {
         val summary = mutableListOf<String>()
 
         summary.add("[Assigned IP Address]")
@@ -41,13 +40,35 @@ internal class NetworkObserver(bridge: ClientBridge) {
         }
         summary.add("")
 
+        summary.add("[UDP Acceleration]")
+        bridge.udpAccelerationConfig?.also {
+            when (it.status) {
+                UDPStatus.OPEN -> {
+                    summary.add("Connected to ${it.serverCurrentAddress!!.hostAddress}:${it.serverCurrentPort}")
+                }
+
+                UDPStatus.CLOSED -> {
+                    summary.add("Connecting...")
+                }
+            }
+        } ?: summary.add("Disabled")
+        summary.add("")
+
         summary.add("[Route]")
         properties.routes.forEach {
             summary.add(it.toString())
         }
 
-        return summary.reduce { acc, s ->
+        summary.reduce { acc, s ->
             acc + "\n" + s
+        }.also {
+            setStringPrefValue(it, MvcPreference.HOME_STATUS, prefs)
+        }
+    }
+
+    internal fun enforceUpdateSummary() {
+        manager.getLinkProperties(manager.activeNetwork)?.also {
+            updateSummary(it)
         }
     }
 
@@ -56,7 +77,10 @@ internal class NetworkObserver(bridge: ClientBridge) {
     }
 
     internal fun close() {
-        manager.unregisterNetworkCallback(callback)
+        try {
+            manager.unregisterNetworkCallback(callback)
+        } catch (_: IllegalArgumentException) { } // already unregistered
+
         wipeStatus()
     }
 }

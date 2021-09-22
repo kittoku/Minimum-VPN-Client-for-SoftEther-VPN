@@ -9,6 +9,7 @@ import kittoku.mvc.extension.toHexByteArray
 import kittoku.mvc.extension.toHexString
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.*
+import kittoku.mvc.service.teminal.udp.UDPStatus
 import kittoku.mvc.unit.DataUnit
 import kittoku.mvc.unit.ethernet.ETHERNET_MAC_ADDRESS_SIZE
 import kittoku.mvc.unit.ethernet.EthernetFrame
@@ -30,6 +31,8 @@ internal enum class ControlMessage {
 }
 
 internal class UDPAccelerationConfig(random: SecureRandom) {
+    internal var status = UDPStatus.CLOSED
+
     internal lateinit var clientReportedAddress: Inet4Address
     internal var clientNATTAddress: Inet4Address? = null
     internal var clientReportedPort = 0
