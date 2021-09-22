@@ -138,7 +138,7 @@ internal class UDPTerminal(private val bridge: ClientBridge) {
 
             val diff = UDP_MAX_PAYLOAD_SIZE - dataSize
             if (diff >= 0) {
-                val randomSize = bridge.random.nextInt(min(diff + 1, UDP_MAX_PADDING_SIZE))
+                val randomSize = bridge.random.nextInt(min(diff, UDP_MAX_PADDING_SIZE) + 1)
                 encryptBuffer.padZeroByte(randomSize)
             } else {
                 throw NotImplementedError()
