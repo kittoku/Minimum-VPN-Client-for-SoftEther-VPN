@@ -20,6 +20,7 @@ You need to satisfy the following conditions to use this app.
 - [x] works with VPN azure
 - [x] works with a global-IP-address-assigned server + UDP acceleration
 - [x] works with VPN azure + UDP acceleration
+
 (Not confirmed in a situation where both a server and a client are inside LAN. Reports are welcome!)
 
 ## Installation
