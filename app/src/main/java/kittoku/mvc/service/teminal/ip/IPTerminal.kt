@@ -13,6 +13,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.yield
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -74,17 +75,21 @@ internal class IPTerminal(private val bridge: ClientBridge) {
     }
 
     private suspend fun retrievePacket(buffer: ByteBuffer) {
-        buffer.clear()
-        buffer.put(bridge.defaultGatewayMacAddress)
-        buffer.put(bridge.clientMacAddress)
-        buffer.putShort(ETHER_TYPE_IPv4)
-        val readLength = inputStream.read(buffer.array(), buffer.position(), IP_MTU)
-        buffer.move(readLength)
-        buffer.flip()
+        while (true) {
+            yield()
 
-        if (buffer.get(ETHERNET_HEADER_SIZE) == IPv4_VERSION_AND_HEADER_LENGTH) { // send only IPv4 packet
-            retrieveChannel.send(buffer)
+            buffer.clear()
+            buffer.put(bridge.defaultGatewayMacAddress)
+            buffer.put(bridge.clientMacAddress)
+            buffer.putShort(ETHER_TYPE_IPv4)
+            val readLength = inputStream.read(buffer.array(), buffer.position(), IP_MTU)
+            buffer.move(readLength)
+            buffer.flip()
+
+            if (buffer.get(ETHERNET_HEADER_SIZE) == IPv4_VERSION_AND_HEADER_LENGTH) break // send only IPv4 packet
         }
+
+        retrieveChannel.send(buffer)
     }
 
     internal suspend fun waitOutgoingPacket() = retrieveChannel.receive()
