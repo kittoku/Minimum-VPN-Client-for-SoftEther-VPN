@@ -8,7 +8,8 @@ internal const val UDP_CIPHER_ALGORITHM = "ChaCha20-Poly1305"
 internal const val CHACHA20_POLY1305_KEY_SIZE = 32
 internal const val CHACHA20_POLY1305_NONCE_SIZE = 12
 
-internal const val UDP_BUFFER_SIZE = 1600
+internal const val UDP_PACKET_BUFFER_SIZE = 1600
+internal const val UDP_SOCKET_RECEIVE_BUFFER_SIZE = 2097152
 internal const val UDP_SOFTETHER_HEADER_SIZE = 23 // 23 = Cookie + 2 * tick + Size + Flag
 internal const val UDP_MAX_PADDING_SIZE = 32
 internal const val UDP_MAX_PAYLOAD_SIZE = ETHERNET_HEADER_SIZE + IP_MTU

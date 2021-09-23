@@ -42,11 +42,11 @@ internal class UDPTerminal(private val bridge: ClientBridge) {
     private val socketMutex = Mutex()
     private val packetMutex = Mutex()
 
-    private val incomingPacket = DatagramPacket(ByteArray(UDP_BUFFER_SIZE), UDP_BUFFER_SIZE)
-    private val outgoingPacket = DatagramPacket(ByteArray(UDP_BUFFER_SIZE), UDP_BUFFER_SIZE)
+    private val incomingPacket = DatagramPacket(ByteArray(UDP_PACKET_BUFFER_SIZE), UDP_PACKET_BUFFER_SIZE)
+    private val outgoingPacket = DatagramPacket(ByteArray(UDP_PACKET_BUFFER_SIZE), UDP_PACKET_BUFFER_SIZE)
     private val nonceHolder = ByteArray(CHACHA20_POLY1305_NONCE_SIZE)
-    private val encryptBuffer = ByteBuffer.allocate(UDP_BUFFER_SIZE)
-    private val decryptBuffer = ByteBuffer.allocate(UDP_BUFFER_SIZE)
+    private val encryptBuffer = ByteBuffer.allocate(UDP_PACKET_BUFFER_SIZE)
+    private val decryptBuffer = ByteBuffer.allocate(UDP_PACKET_BUFFER_SIZE)
 
     private val regexIP = Regex(UDP_NATT_IP_REGEX)
     private val regexPort = Regex(UDP_NATT_PORT_REGEX)
@@ -65,6 +65,7 @@ internal class UDPTerminal(private val bridge: ClientBridge) {
         }
 
         socket = DatagramSocket(0, address)
+        socket.receiveBufferSize = UDP_SOCKET_RECEIVE_BUFFER_SIZE
 
         config.clientReportedAddress = address
         config.clientReportedPort = socket.localPort
