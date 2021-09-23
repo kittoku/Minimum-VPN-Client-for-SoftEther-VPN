@@ -11,23 +11,20 @@ I want to establish a VPN connection via [VPN Azure](http://www.vpnazure.net/en/
 with UDP acceleration enabled from Android. So this app's goal is to implement minimum features to do that.
 
 ## Limitation
-If you satisfy the following conditions, you can establish VPN connection by TCP connection.
-* The server has a global IP address
-* SecureNAT is enabled
+You need to satisfy the following conditions to use this app.
+* DHCP(SecureNAT) is enabled
 * Password authentication is enabled
-* The virtual hub name is fixed to "VPN"
-
-Since UDP acceleration is not yet implemented, this app has less performance than apps with other protocols.
 
 ## Milestones
 - [x] works with a global-IP-address-assigned server
 - [x] works with VPN azure
-- [ ] works with a global-IP-address-assigned server + UDP acceleration
-- [ ] works with VPN azure + UDP acceleration
+- [x] works with a global-IP-address-assigned server + UDP acceleration
+- [x] works with VPN azure + UDP acceleration
+(Not confirmed in a situation where both a server and a client are inside LAN. Reports are welcome!)
 
 ## Installation
 You can download the latest version APK
-[here](https://github.com/kittoku/Minimum-VPN-Client-for-SoftEther-VPN/releases/download/v0.1.1/mvc-0.1.1.apk).
+[here](https://github.com/kittoku/Minimum-VPN-Client-for-SoftEther-VPN/releases/download/v0.2.0/mvc-0.2.0.apk).
 
 ## Screenshots
 <img src="images/example_home.png" width=25%> <img src="images/example_setting.png" width=25%>
