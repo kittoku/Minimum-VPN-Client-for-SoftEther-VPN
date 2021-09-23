@@ -25,7 +25,7 @@ You need to satisfy the following conditions to use this app.
 
 ## Installation
 You can download the latest version APK
-[here](https://github.com/kittoku/Minimum-VPN-Client-for-SoftEther-VPN/releases/download/v0.2.0/mvc-0.2.0.apk).
+[here](https://github.com/kittoku/Minimum-VPN-Client-for-SoftEther-VPN/releases/download/v0.2.1/mvc-0.2.1.apk).
 
 ## Screenshots
 <img src="images/example_home.png" width=25%> <img src="images/example_setting.png" width=25%>
