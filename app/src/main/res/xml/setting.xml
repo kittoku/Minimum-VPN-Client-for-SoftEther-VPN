@@ -8,7 +8,8 @@
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Ethernet Layer">
-        <kittoku.mvc.preference.custom.MacAddressPreference android:key="MAC_ADDRESS"/>
+        <kittoku.mvc.preference.custom.EthernetMTUPreference android:key="ETHERNET_MTU"/>
+        <kittoku.mvc.preference.custom.EthernetMacAddressPreference android:key="ETHERNET_MAC_ADDRESS"/>
     </PreferenceCategory>
 
     <PreferenceCategory android:title="UDP Acceleration">

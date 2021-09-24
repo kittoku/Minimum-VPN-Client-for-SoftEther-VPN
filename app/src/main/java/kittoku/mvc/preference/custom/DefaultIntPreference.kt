@@ -33,3 +33,8 @@ internal class SslPortPreference(context: Context, attrs: AttributeSet) : Defaul
     override val mvcPreference = MvcPreference.SSL_PORT
     override val preferenceTitle = "Port Number"
 }
+
+internal class EthernetMTUPreference(context: Context, attrs: AttributeSet) : DefaultIntPreference(context, attrs) {
+    override val mvcPreference = MvcPreference.ETHERNET_MTU
+    override val preferenceTitle = "MTU"
+}

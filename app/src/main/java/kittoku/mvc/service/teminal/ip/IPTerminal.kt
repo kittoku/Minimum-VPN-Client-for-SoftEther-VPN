@@ -47,7 +47,7 @@ internal class IPTerminal(private val bridge: ClientBridge) {
         }
 
         builder.setBlocking(true)
-        builder.setMtu(IP_MTU)
+        builder.setMtu(bridge.internalEthernetMTU)
 
         fd = builder.establish()!!
         inputStream = FileInputStream(fd.fileDescriptor)
@@ -56,7 +56,7 @@ internal class IPTerminal(private val bridge: ClientBridge) {
 
     internal fun launchJobRetrieve() {
         jobRetrieve = bridge.scope.launch(bridge.handler) {
-            val bufferSize = IP_MTU + ETHERNET_HEADER_SIZE
+            val bufferSize = bridge.internalEthernetMTU + ETHERNET_HEADER_SIZE
             val alpha = ByteBuffer.allocate(bufferSize)
             val beta = ByteBuffer.allocate(bufferSize)
 
@@ -82,7 +82,7 @@ internal class IPTerminal(private val bridge: ClientBridge) {
             buffer.put(bridge.defaultGatewayMacAddress)
             buffer.put(bridge.clientMacAddress)
             buffer.putShort(ETHER_TYPE_IPv4)
-            val readLength = inputStream.read(buffer.array(), buffer.position(), IP_MTU)
+            val readLength = inputStream.read(buffer.array(), buffer.position(), bridge.internalEthernetMTU)
             buffer.move(readLength)
             buffer.flip()
 

@@ -51,8 +51,8 @@ internal abstract class SummaryOnlyPreference(context: Context, attrs: Attribute
     }
 }
 
-internal class MacAddressPreference(context: Context, attrs: AttributeSet) : SummaryOnlyPreference(context, attrs) {
-    override val mvcPreference = MvcPreference.MAC_ADDRESS
+internal class EthernetMacAddressPreference(context: Context, attrs: AttributeSet) : SummaryOnlyPreference(context, attrs) {
+    override val mvcPreference = MvcPreference.ETHERNET_MAC_ADDRESS
     override val preferenceTitle = "MAC Address"
     override val summaryValue: String
         get() {

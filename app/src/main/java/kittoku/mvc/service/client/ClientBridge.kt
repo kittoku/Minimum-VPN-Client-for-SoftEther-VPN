@@ -9,12 +9,19 @@ import kittoku.mvc.extension.toHexByteArray
 import kittoku.mvc.extension.toHexString
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.*
+import kittoku.mvc.service.teminal.udp.CHACHA20_POLY1305_NONCE_SIZE
+import kittoku.mvc.service.teminal.udp.CHACHA20_POLY1305_TAG_SIZE
 import kittoku.mvc.service.teminal.udp.UDPStatus
+import kittoku.mvc.service.teminal.udp.UDP_SOFTETHER_HEADER_SIZE
 import kittoku.mvc.unit.DataUnit
+import kittoku.mvc.unit.ethernet.ETHERNET_HEADER_SIZE
 import kittoku.mvc.unit.ethernet.ETHERNET_MAC_ADDRESS_SIZE
+import kittoku.mvc.unit.ethernet.ETHERNET_MAX_MTU
 import kittoku.mvc.unit.ethernet.EthernetFrame
 import kittoku.mvc.unit.http.HttpMessage
 import kittoku.mvc.unit.ip.IPv4_ADDRESS_SIZE
+import kittoku.mvc.unit.ip.IPv4_HEADER_SIZE
+import kittoku.mvc.unit.udp.UDP_HEADER_SIZE
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -115,6 +122,9 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
 
     internal var udpAccelerationConfig: UDPAccelerationConfig? = null
 
+    internal var internalEthernetMTU = 0
+    internal var maxInternalFrameSize = 0
+
     internal val assignedIpAddress = ByteArray(IPv4_ADDRESS_SIZE)
     internal val subnetMask = ByteArray(IPv4_ADDRESS_SIZE)
     internal val defaultGatewayIpAddress = ByteArray(IPv4_ADDRESS_SIZE)
@@ -151,7 +161,19 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
 
         if (getBooleanPrefValue(MvcPreference.UDP_ENABLE_ACCELERATION, prefs)) {
             udpAccelerationConfig = UDPAccelerationConfig(random)
+
+            internalEthernetMTU = getIntPrefValue(MvcPreference.ETHERNET_MTU, prefs)
+            internalEthernetMTU -= IPv4_HEADER_SIZE
+            internalEthernetMTU -= UDP_HEADER_SIZE
+            internalEthernetMTU -= UDP_SOFTETHER_HEADER_SIZE
+            internalEthernetMTU -= CHACHA20_POLY1305_NONCE_SIZE
+            internalEthernetMTU -= CHACHA20_POLY1305_TAG_SIZE
+            internalEthernetMTU -= ETHERNET_HEADER_SIZE
+        } else {
+            internalEthernetMTU = ETHERNET_MAX_MTU // ignore preference because TCP connection will optimize
         }
+
+        maxInternalFrameSize = internalEthernetMTU + ETHERNET_HEADER_SIZE
 
         isLogEnabled = getBooleanPrefValue(MvcPreference.LOG_DO_SAVE_LOG, prefs)
         logDirectory = loadUri(MvcPreference.LOG_DIRECTORY, prefs)
@@ -168,11 +190,11 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
     }
 
     private fun loadMac(prefs: SharedPreferences): ByteArray {
-        var addressString = getStringPrefValue(MvcPreference.MAC_ADDRESS, prefs)
+        var addressString = getStringPrefValue(MvcPreference.ETHERNET_MAC_ADDRESS, prefs)
 
         if (addressString.isEmpty()) {
             addressString = "5E" + random.nextBytes(5).toHexString()
-            setStringPrefValue(addressString, MvcPreference.MAC_ADDRESS, prefs)
+            setStringPrefValue(addressString, MvcPreference.ETHERNET_MAC_ADDRESS, prefs)
         }
 
         return addressString.toHexByteArray()

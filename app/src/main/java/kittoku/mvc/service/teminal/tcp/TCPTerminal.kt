@@ -8,7 +8,6 @@ import kittoku.mvc.extension.capacityAfterPayload
 import kittoku.mvc.extension.move
 import kittoku.mvc.service.client.ClientBridge
 import kittoku.mvc.service.client.ControlMessage
-import kittoku.mvc.service.client.ETHERNET_MTU
 import kittoku.mvc.service.teminal.isEchoFrame
 import kittoku.mvc.service.teminal.isToMeFrame
 import kittoku.mvc.unit.ethernet.ETHERNET_MAC_ADDRESS_SIZE
@@ -36,10 +35,10 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
         it.position(0)
         it.limit(0)
     }
-    private val outgoingBuffer = ByteBuffer.allocate(16384)
-    private val macAddressHolder = ByteArray(ETHERNET_MAC_ADDRESS_SIZE)
 
+    private val outgoingBuffer = ByteBuffer.allocate(16384)
     private var outgoingFrameNum = 0
+    private val minFrameBufferSize = bridge.internalEthernetMTU + Int.SIZE_BYTES // need size info
 
     private val mutex = Mutex()
 
@@ -365,7 +364,7 @@ internal class TCPTerminal(private val bridge: ClientBridge) {
 
         outgoingFrameNum += 1
 
-        return outgoingBuffer.remaining() >= ETHERNET_MTU
+        return outgoingBuffer.remaining() >= minFrameBufferSize
     }
 
     internal suspend fun sendOutgoingPacket() {
