@@ -308,7 +308,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
                     }
 
                     logWriter?.close()
-                    networkObserver.close()
+                    if (::networkObserver.isInitialized) networkObserver.close()
 
                     bridge.service.stopForeground(true)
                     bridge.service.stopSelf()
