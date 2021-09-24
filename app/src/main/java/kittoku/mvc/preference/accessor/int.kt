@@ -10,12 +10,12 @@ internal fun getIntPrefValue(key: MvcPreference, prefs: SharedPreferences): Int 
         else -> throw NotImplementedError()
     }
 
-    return prefs.getInt(key.name, defaultValue)
+    return prefs.getString(key.name, null)?.toIntOrNull() ?: defaultValue
 }
 
 internal fun setIntPrefValue(value: Int, key: MvcPreference, prefs: SharedPreferences) {
     prefs.edit().also {
-        it.putInt(key.name, value)
+        it.putString(key.name, value.toString())
         it.apply()
     }
 }
