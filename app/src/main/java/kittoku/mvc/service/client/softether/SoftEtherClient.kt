@@ -104,7 +104,7 @@ internal class SoftEtherClient(private val bridge: ClientBridge) {
 
         properties.sepMethod = SepMethod().also { it.value = "login" }
         properties.sepAuthType = SepAuthType().also { it.value = 1 }
-        properties.sepUsername = SepUsername().also { it.value = "debug" }
+        properties.sepUsername = SepUsername().also { it.value = bridge.clientUsername }
         properties.sepProtocol = SepProtocol().also { it.value = 0 }
         properties.sepHubName = SepHubName().also { it.value = bridge.serverHubName }
         properties.sepUseEncrypt = SepUseEncrypt().also { it.value = 1 }
