@@ -11,7 +11,6 @@ import kittoku.mvc.extension.*
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.setBooleanPrefValue
 import kittoku.mvc.service.CHANNEL_ID
-import kittoku.mvc.service.client.*
 import kittoku.mvc.service.client.arp.ARPClient
 import kittoku.mvc.service.client.dhcp.DhcpClient
 import kittoku.mvc.service.client.softether.SoftEtherClient
@@ -99,7 +98,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
                 while (isActive) {
                     relayDhcpMessage()
 
-                    if (mailbox.poll() == ControlMessage.DHCP_NEGOTIATION_FINISHED) {
+                    if (mailbox.tryReceive().getOrNull() == ControlMessage.DHCP_NEGOTIATION_FINISHED) {
                         bridge.dhcpChannel.clear()
                         break
                     }
@@ -114,7 +113,7 @@ internal class ControlClient(private val bridge: ClientBridge) {
                 while (isActive) {
                     relayAprPacket()
 
-                    if (mailbox.poll() == ControlMessage.ARP_NEGOTIATION_FINISHED) {
+                    if (mailbox.tryReceive().getOrNull() == ControlMessage.ARP_NEGOTIATION_FINISHED) {
                         bridge.arpChannel.clear()
                         break
                     }

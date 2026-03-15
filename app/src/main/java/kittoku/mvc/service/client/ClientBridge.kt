@@ -28,6 +28,7 @@ import kotlinx.coroutines.channels.Channel
 import java.net.Inet4Address
 import java.security.SecureRandom
 import javax.crypto.SecretKey
+import androidx.core.net.toUri
 
 
 internal enum class ControlMessage {
@@ -185,7 +186,7 @@ internal class ClientBridge(internal val scope: CoroutineScope, internal val han
         return if (uriString.isEmpty()) {
             null
         } else {
-            Uri.parse(uriString)
+            uriString.toUri()
         }
     }
 

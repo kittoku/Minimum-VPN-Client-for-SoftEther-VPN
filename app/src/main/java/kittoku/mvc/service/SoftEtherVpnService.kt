@@ -59,8 +59,13 @@ internal class SoftEtherVpnService : VpnService() {
         val notificationManager: NotificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.createNotificationChannel(channel)
 
-        val intent = Intent(this, SoftEtherVpnService::class.java).setAction(ACTION_VPN_DISCONNECT)
-        val pendingIntent = PendingIntent.getService(this, 0, intent, 0)
+        val pendingIntent = PendingIntent.getService(
+            this,
+            0,
+            Intent(this, SoftEtherVpnService::class.java).setAction(ACTION_VPN_DISCONNECT),
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val builder = NotificationCompat.Builder(this, CHANNEL_ID).also {
             it.setSmallIcon(R.drawable.ic_baseline_vpn_lock_24)
             it.setContentText("Disconnect SoftEther VPN connection")

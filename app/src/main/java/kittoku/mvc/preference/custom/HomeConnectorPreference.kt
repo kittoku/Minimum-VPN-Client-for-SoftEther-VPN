@@ -21,12 +21,12 @@ internal class HomeConnectorPreference(context: Context, attrs: AttributeSet) : 
 
         key = mvcPreference.name
 
-        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        sharedPreferences!!.registerOnSharedPreferenceChangeListener(listener)
     }
 
     override fun onDetached() {
         super.onDetached()
 
-        sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        sharedPreferences!!.unregisterOnSharedPreferenceChangeListener(listener)
     }
 }

@@ -7,6 +7,6 @@ import kotlinx.coroutines.yield
 internal suspend fun <T> Channel<T>.clear() {
     while (true) {
         yield()
-        poll() ?: break
+        tryReceive().getOrNull() ?: break
     }
 }

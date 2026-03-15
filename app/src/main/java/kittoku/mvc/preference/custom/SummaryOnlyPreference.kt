@@ -20,7 +20,7 @@ internal abstract class SummaryOnlyPreference(context: Context, attrs: Attribute
     }
 
     protected open val summaryValue: String
-        get() = getStringPrefValue(mvcPreference, sharedPreferences)
+        get() = getStringPrefValue(mvcPreference, sharedPreferences!!)
 
     private fun updateSummary() {
         summary = summaryValue
@@ -32,19 +32,19 @@ internal abstract class SummaryOnlyPreference(context: Context, attrs: Attribute
         title = preferenceTitle
         updateSummary()
 
-        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        sharedPreferences!!.registerOnSharedPreferenceChangeListener(listener)
     }
 
     override fun onDetached() {
         super.onDetached()
 
-        sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        sharedPreferences!!.unregisterOnSharedPreferenceChangeListener(listener)
     }
 
-    override fun onBindViewHolder(holder: PreferenceViewHolder?) {
+    override fun onBindViewHolder(holder: PreferenceViewHolder) {
         super.onBindViewHolder(holder)
 
-        holder?.findViewById(android.R.id.summary)?.also {
+        holder.findViewById(android.R.id.summary)?.also {
             it as TextView
             it.maxLines = Int.MAX_VALUE
         }
@@ -56,7 +56,7 @@ internal class EthernetMacAddressPreference(context: Context, attrs: AttributeSe
     override val preferenceTitle = "MAC Address"
     override val summaryValue: String
         get() {
-            val address = getStringPrefValue(mvcPreference, sharedPreferences)
+            val address = getStringPrefValue(mvcPreference, sharedPreferences!!)
 
             return if (address.isEmpty()) {
                 "[No Address Assigned]"
@@ -88,7 +88,7 @@ internal class HomeStatusPreference(context: Context, attrs: AttributeSet) : Sum
     override val preferenceTitle = "Current Status"
     override val summaryValue: String
         get() {
-            val currentValue = getStringPrefValue(mvcPreference, sharedPreferences)
+            val currentValue = getStringPrefValue(mvcPreference, sharedPreferences!!)
 
             return if (currentValue.isEmpty()) {
                 "[No Connection Established]"

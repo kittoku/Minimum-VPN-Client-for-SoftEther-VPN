@@ -2,12 +2,12 @@ package kittoku.mvc.preference.custom
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.util.AttributeSet
 import android.widget.TextView
 import androidx.preference.Preference
 import androidx.preference.PreferenceViewHolder
 import kittoku.mvc.preference.MvcPreference
+import androidx.core.net.toUri
 
 
 internal abstract class LinkPreference(context: Context, attrs: AttributeSet) : Preference(context, attrs) {
@@ -21,14 +21,14 @@ internal abstract class LinkPreference(context: Context, attrs: AttributeSet) : 
 
         title = preferenceTitle
         summary = preferenceSummary
-        intent = Intent(Intent.ACTION_VIEW).also { it.data = Uri.parse(url) }
+        intent = Intent(Intent.ACTION_VIEW).also { it.data = url.toUri() }
         isIconSpaceReserved = false
     }
 
-    override fun onBindViewHolder(holder: PreferenceViewHolder?) {
+    override fun onBindViewHolder(holder: PreferenceViewHolder) {
         super.onBindViewHolder(holder)
 
-        holder?.findViewById(android.R.id.summary)?.also {
+        holder.findViewById(android.R.id.summary)?.also {
             it as TextView
             it.maxLines = Int.MAX_VALUE
         }

@@ -94,7 +94,7 @@ internal class IPTerminal(private val bridge: ClientBridge) {
 
     internal suspend fun waitOutgoingPacket() = retrieveChannel.receive()
 
-    internal fun pollOutgoingPacket() = retrieveChannel.poll()
+    internal fun pollOutgoingPacket() = retrieveChannel.tryReceive().getOrNull()
 
     internal suspend fun feedIncomingPacket(buffer: ByteBuffer) {
         mutex.withLock {

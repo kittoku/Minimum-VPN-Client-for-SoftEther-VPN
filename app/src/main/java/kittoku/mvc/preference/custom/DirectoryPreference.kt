@@ -2,11 +2,11 @@ package kittoku.mvc.preference.custom
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.net.Uri
 import android.util.AttributeSet
 import androidx.preference.Preference
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.getStringPrefValue
+import androidx.core.net.toUri
 
 
 internal abstract class DirectoryPreference(context: Context, attrs: AttributeSet) : Preference(context, attrs) {
@@ -20,12 +20,12 @@ internal abstract class DirectoryPreference(context: Context, attrs: AttributeSe
 
     private val summaryValue: String
         get() {
-            val currentValue = getStringPrefValue(mvcPreference, sharedPreferences)
+            val currentValue = getStringPrefValue(mvcPreference, sharedPreferences!!)
 
             return if (currentValue.isEmpty()) {
                 "[No Directory Selected]"
             } else {
-                Uri.parse(currentValue).path!!
+                currentValue.toUri().path!!
             }
         }
 
@@ -39,13 +39,13 @@ internal abstract class DirectoryPreference(context: Context, attrs: AttributeSe
         title = preferenceTitle
         updateSummary()
 
-        sharedPreferences.registerOnSharedPreferenceChangeListener(listener)
+        sharedPreferences!!.registerOnSharedPreferenceChangeListener(listener)
     }
 
     override fun onDetached() {
         super.onDetached()
 
-        sharedPreferences.unregisterOnSharedPreferenceChangeListener(listener)
+        sharedPreferences!!.unregisterOnSharedPreferenceChangeListener(listener)
     }
 }
 

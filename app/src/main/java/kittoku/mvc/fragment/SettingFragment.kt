@@ -32,7 +32,7 @@ internal class SettingFragment : PreferenceFragmentCompat() {
             setStringPrefValue(
                 uri?.toString() ?: "",
                 MvcPreference.LOG_DIRECTORY,
-                preferenceManager.sharedPreferences
+                preferenceManager.sharedPreferences!!
             )
         }
 
