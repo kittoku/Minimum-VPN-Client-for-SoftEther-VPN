@@ -29,6 +29,7 @@ import java.net.Inet4Address
 import java.security.SecureRandom
 import javax.crypto.SecretKey
 import androidx.core.net.toUri
+import javax.net.ssl.SSLSocket
 
 
 internal enum class ControlMessage {
@@ -106,6 +107,7 @@ internal class UDPAccelerationConfig(random: SecureRandom) {
 
 internal class ClientBridge(internal val scope: CoroutineScope, internal val handler: CoroutineExceptionHandler) {
     internal lateinit var service: VpnService // separate from constructor for test
+    internal lateinit var socket: SSLSocket
 
     internal var isTest = false
     internal val controlMailbox = Channel<ControlMessage>(1)

@@ -1,5 +1,7 @@
 package kittoku.mvc.service.client.softether
 
+import android.os.Build
+import kittoku.mvc.R
 import kittoku.mvc.debug.ErrorCode
 import kittoku.mvc.debug.assertAlways
 import kittoku.mvc.debug.assertOrThrow
@@ -11,7 +13,52 @@ import kittoku.mvc.service.client.ControlMessage
 import kittoku.mvc.service.teminal.udp.CHACHA20_POLY1305_KEY_SIZE
 import kittoku.mvc.service.teminal.udp.UDP_CIPHER_ALGORITHM
 import kittoku.mvc.unit.http.HttpMessage
-import kittoku.mvc.unit.property.*
+import kittoku.mvc.unit.property.COMPATIBLE_BUILD
+import kittoku.mvc.unit.property.COMPATIBLE_VERSION
+import kittoku.mvc.unit.property.PropertyPack
+import kittoku.mvc.unit.property.SepAuthType
+import kittoku.mvc.unit.property.SepBuild
+import kittoku.mvc.unit.property.SepClientBuild
+import kittoku.mvc.unit.property.SepClientHostname
+import kittoku.mvc.unit.property.SepClientID
+import kittoku.mvc.unit.property.SepClientIPAddress
+import kittoku.mvc.unit.property.SepClientOSName
+import kittoku.mvc.unit.property.SepClientOSVersion
+import kittoku.mvc.unit.property.SepClientPort
+import kittoku.mvc.unit.property.SepClientProductBuild
+import kittoku.mvc.unit.property.SepClientProductName
+import kittoku.mvc.unit.property.SepClientProductVersion
+import kittoku.mvc.unit.property.SepClientStr
+import kittoku.mvc.unit.property.SepClientVersion
+import kittoku.mvc.unit.property.SepHalfConnection
+import kittoku.mvc.unit.property.SepHello
+import kittoku.mvc.unit.property.SepHubName
+import kittoku.mvc.unit.property.SepMaxConnection
+import kittoku.mvc.unit.property.SepMethod
+import kittoku.mvc.unit.property.SepPenCore
+import kittoku.mvc.unit.property.SepProtocol
+import kittoku.mvc.unit.property.SepProxyIPAddress
+import kittoku.mvc.unit.property.SepProxyPort
+import kittoku.mvc.unit.property.SepSecurePassword
+import kittoku.mvc.unit.property.SepServerHostname
+import kittoku.mvc.unit.property.SepServerIPAddress
+import kittoku.mvc.unit.property.SepServerPort2
+import kittoku.mvc.unit.property.SepServerProductBuild
+import kittoku.mvc.unit.property.SepServerProductName
+import kittoku.mvc.unit.property.SepServerProductVersion
+import kittoku.mvc.unit.property.SepUDPClientIP
+import kittoku.mvc.unit.property.SepUDPClientKeyV2
+import kittoku.mvc.unit.property.SepUDPClientPort
+import kittoku.mvc.unit.property.SepUDPMaxVersion
+import kittoku.mvc.unit.property.SepUDPSupportFastDisconnectDetect
+import kittoku.mvc.unit.property.SepUDPVersion
+import kittoku.mvc.unit.property.SepUniqueIDCamel
+import kittoku.mvc.unit.property.SepUniqueIDSnake
+import kittoku.mvc.unit.property.SepUseCompress
+import kittoku.mvc.unit.property.SepUseEncrypt
+import kittoku.mvc.unit.property.SepUseUDPAcceleration
+import kittoku.mvc.unit.property.SepUsername
+import kittoku.mvc.unit.property.SepVersion
 import kotlinx.coroutines.launch
 import java.net.Inet4Address
 import java.nio.ByteBuffer
@@ -19,7 +66,7 @@ import javax.crypto.spec.SecretKeySpec
 
 
 internal class SoftEtherClient(private val bridge: ClientBridge) {
-    private lateinit var challenge: SepRandom
+    private lateinit var receivedPack: PropertyPack
 
     internal fun launchJobNegotiation() {
         bridge.scope.launch(bridge.handler) {
@@ -75,7 +122,7 @@ internal class SoftEtherClient(private val bridge: ClientBridge) {
         bridge.controlChannel.send(request)
         val response = bridge.softEtherChannel.receive()
 
-        val pack = PropertyPack().also {
+        receivedPack = PropertyPack().also {
             val buffer = ByteBuffer.wrap(response.body!!)
             assertOrThrow(ErrorCode.SOFTETHER_INVALID_PROPERTY_PACK) {
                 it.read(buffer)
@@ -84,9 +131,8 @@ internal class SoftEtherClient(private val bridge: ClientBridge) {
 
         assertOrThrow(ErrorCode.SOFTETHER_INVALID_PROTOCOL_SERVER) {
             assertAlways(response.header == HTTP_200_HEADER)
-            assertAlways(pack.sepError == null)
-            assertAlways(pack.sepRandom != null)
-            challenge = pack.sepRandom!!
+            assertAlways(receivedPack.sepError == null)
+            assertAlways(receivedPack.sepRandom != null)
         }
     }
 
@@ -96,11 +142,40 @@ internal class SoftEtherClient(private val bridge: ClientBridge) {
 
         val hashedPassword = hashSha0(password + uppercaseUsername)
 
-        return hashSha0(hashedPassword + challenge.value)
+        return hashSha0(hashedPassword + receivedPack.sepRandom!!.value)
     }
 
     private fun prepareProperties(): ByteArray {
         val properties = PropertyPack()
+        val appName = bridge.service.getText(R.string.app_name).toString()
+
+        properties.sepBuild = SepBuild().also { it.value = COMPATIBLE_BUILD }
+        properties.sepVersion = SepVersion().also { it.value = COMPATIBLE_VERSION }
+        properties.sepUniqueIDCamel = SepUniqueIDCamel().also { it.value = bridge.random.nextBytes(16) }
+        properties.sepUniqueIDSnake = SepUniqueIDSnake().also { it.value = bridge.random.nextBytes(20) } // pseudo implementation
+        properties.sepClientBuild = SepClientBuild().also { it.value = COMPATIBLE_BUILD }
+        properties.sepClientID = SepClientID().also { it.value = 0 }
+        properties.sepClientStr = SepClientStr().also { it.value = appName }
+        properties.sepClientVersion = SepClientVersion().also { it.value = COMPATIBLE_VERSION }
+        properties.sepClientHostname = SepClientHostname().also { it.value = bridge.socket.localAddress.hostName }
+        properties.sepClientIPAddress = SepClientIPAddress().also { bridge.socket.localAddress.address.copyInto(it.value) }
+        properties.sepClientOSName = SepClientOSName().also { it.value = "Android" }
+        properties.sepClientOSVersion = SepClientOSVersion().also { it.value = Build.VERSION.RELEASE }
+        properties.sepClientPort = SepClientPort().also { it.value = bridge.socket.localPort }
+        properties.sepClientProductBuild = SepClientProductBuild().also { it.value = COMPATIBLE_BUILD }
+        properties.sepClientProductName = SepClientProductName().also { it.value = appName }
+        properties.sepClientProductVersion = SepClientProductVersion().also { it.value = COMPATIBLE_VERSION }
+        properties.sepHello = SepHello().also { it.value = appName }
+        
+        properties.sepProxyPort = SepProxyPort()
+        properties.sepProxyIPAddress = SepProxyIPAddress()
+
+        properties.sepServerHostname = SepServerHostname().also { it.value = bridge.socket.inetAddress.hostName }
+        properties.sepServerIPAddress = SepServerIPAddress().also { bridge.socket.inetAddress.address.copyInto(it.value) }
+        properties.sepServerPort = SepServerPort2().also { it.value = bridge.socket.port }
+        properties.sepServerProductBuild = SepServerProductBuild().also { it.value = receivedPack.sepBuild?.value ?: 0 }
+        properties.sepServerProductName = SepServerProductName().also { it.value = receivedPack.sepHello?.value ?: "" }
+        properties.sepServerProductVersion = SepServerProductVersion().also { it.value = receivedPack.sepVersion?.value ?: 0 }
 
         properties.sepMethod = SepMethod().also { it.value = "login" }
         properties.sepAuthType = SepAuthType().also { it.value = 1 }
@@ -112,7 +187,6 @@ internal class SoftEtherClient(private val bridge: ClientBridge) {
         properties.sepMaxConnection = SepMaxConnection().also { it.value = 1 }
         properties.sepHalfConnection = SepHalfConnection().also { it.value = 0 }
         properties.sepSecurePassword = SepSecurePassword().also { it.value.read(calcSecurePassword()) }
-        properties.sepClientProductName = SepClientProductName().also { it.value = "Minimum VPN Client for SoftEther VPN" }
         properties.sepPenCore = SepPenCore().also {
             val randomSize = bridge.random.nextInt(1000)
             it.value = bridge.random.nextBytes(randomSize)

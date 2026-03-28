@@ -1,12 +1,43 @@
 package kittoku.mvc.unit.property
 
 
+internal const val COMPATIBLE_VERSION = 444
+internal const val COMPATIBLE_BUILD = 9807
+
 internal const val SEP_INT_TYPE = 0
 internal const val SEP_BYTES_TYPE = 1
 internal const val SEP_ASCII_TYPE = 2
 internal const val SEP_UTF8_TYPE = 3
 internal const val SEP_LONG_TYPE = 4
 
+
+internal const val SEP_BUILD = "build"
+internal const val SEP_VERSION = "version"
+internal const val SEP_UNIQUE_ID_CAMEL = "UniqueId"
+internal const val SEP_UNIQUE_ID_SNAKE = "unique_id"
+internal const val SEP_CLIENT_BUILD = "client_build"
+internal const val SEP_CLIENT_ID = "client_id"
+internal const val SEP_CLIENT_STR = "client_str"
+internal const val SEP_CLIENT_VER = "client_ver"
+internal const val SEP_CLIENT_HOSTNAME = "ClientHostname"
+internal const val SEP_CLIENT_IP_ADDRESS = "ClientIpAddress"
+internal const val SEP_CLIENT_OS_NAME = "ClientOsName"
+internal const val SEP_CLIENT_OS_VER = "ClientOsVer"
+internal const val SEP_CLIENT_PORT = "ClientPort"
+internal const val SEP_CLIENT_PRODUCT_BUILD = "ClientProductBuild"
+internal const val SEP_CLIENT_PRODUCT_NAME = "ClientProductName"
+internal const val SEP_CLIENT_PRODUCT_VER = "ClientProductVer"
+internal const val SEP_HELLO = "hello"
+
+internal const val SEP_PROXY_PORT = "ProxyPort"
+internal const val SEP_PROXY_IP_ADDRESS = "ProxyIpAddress"
+
+internal const val SEP_SERVER_HOSTNAME = "ServerHostname"
+internal const val SEP_SERVER_IP_ADDRESS = "ServerIpAddress"
+internal const val SEP_SERVER_PORT2 = "ServerPort2"
+internal const val SEP_SERVER_PRODUCT_BUILD = "ServerProductBuild"
+internal const val SEP_SERVER_PRODUCT_NAME = "ServerProductName"
+internal const val SEP_SERVER_PRODUCT_VER = "ServerProductVer"
 
 internal const val SEP_METHOD = "method"
 internal const val SEP_AUTH_TYPE = "authtype"
@@ -18,7 +49,7 @@ internal const val SEP_USE_ENCRYPT = "use_encrypt"
 internal const val SEP_USE_COMPRESS = "use_compress"
 internal const val SEP_MAX_CONNECTION = "max_connection"
 internal const val SEP_HALF_CONNECTION = "half_connection"
-internal const val SEP_CLIENT_PRODUCT_NAME = "ClientProductName"
+
 internal const val SEP_RANDOM = "random"
 internal const val SEP_PEN_CORE = "pencore"
 internal const val SEP_ERROR = "error"

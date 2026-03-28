@@ -1,10 +1,12 @@
 package kittoku.mvc.unit.property
 
 import kittoku.mvc.debug.assertAlways
+import kittoku.mvc.extension.reversed
 import java.nio.ByteBuffer
 
 
 internal open class SoftEtherIntProperty : SoftEtherProperty() {
+    protected open val isLittleEndian = false
     override val valueType = SEP_INT_TYPE
     override val valueNum = 1
     override val length: Int
@@ -14,17 +16,71 @@ internal open class SoftEtherIntProperty : SoftEtherProperty() {
 
     override fun write(buffer: ByteBuffer) {
         writeHeader(buffer)
-        buffer.putInt(value)
+        buffer.putInt(if(isLittleEndian) value.reversed() else value)
     }
 
     override fun read(buffer: ByteBuffer) {
         assertAlways(buffer.int == valueType)
         assertAlways(buffer.int == valueNum)
 
-        value = buffer.int
+        value = if(isLittleEndian) buffer.int.reversed() else buffer.int
     }
 }
 
+internal class SepClientID : SoftEtherIntProperty() {
+    override val key = SEP_CLIENT_ID
+}
+
+internal class SepVersion : SoftEtherIntProperty() {
+    override val key = SEP_VERSION
+}
+
+internal class SepBuild : SoftEtherIntProperty() {
+    override val key = SEP_BUILD
+}
+
+internal class SepClientVersion : SoftEtherIntProperty() {
+    override val key = SEP_CLIENT_VER
+}
+
+internal class SepClientBuild : SoftEtherIntProperty() {
+    override val key = SEP_CLIENT_BUILD
+}
+
+internal class SepClientPort : SoftEtherIntProperty() {
+    override val key = SEP_CLIENT_PORT
+    override val isLittleEndian = true
+}
+
+internal class SepClientProductBuild : SoftEtherIntProperty() {
+    override val key = SEP_CLIENT_PRODUCT_BUILD
+    override val isLittleEndian = true
+}
+
+internal class SepClientProductVersion : SoftEtherIntProperty() {
+    override val key = SEP_CLIENT_PRODUCT_VER
+    override val isLittleEndian = true
+}
+
+internal class SepProxyPort : SoftEtherIntProperty() {
+    override val key = SEP_PROXY_PORT
+    override val isLittleEndian = true
+}
+
+internal class SepServerPort2 : SoftEtherIntProperty() {
+    override val key = SEP_SERVER_PORT2
+    override val isLittleEndian = true
+}
+
+internal class SepServerProductBuild : SoftEtherIntProperty() {
+    override val key = SEP_SERVER_PRODUCT_BUILD
+    override val isLittleEndian = true
+}
+
+internal class SepServerProductVersion : SoftEtherIntProperty() {
+    override val key = SEP_SERVER_PRODUCT_VER
+    override val isLittleEndian = true
+}
 internal class SepAuthType : SoftEtherIntProperty() {
     override val key = SEP_AUTH_TYPE
 }

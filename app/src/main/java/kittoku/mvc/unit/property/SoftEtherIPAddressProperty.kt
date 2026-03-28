@@ -29,6 +29,18 @@ internal open class SoftEtherIPAddressProperty : SoftEtherProperty() {
     }
 }
 
+internal class SepClientIPAddress : SoftEtherIPAddressProperty() {
+    override val key = SEP_CLIENT_IP_ADDRESS
+}
+
+internal class SepProxyIPAddress : SoftEtherIPAddressProperty() {
+    override val key = SEP_PROXY_IP_ADDRESS
+}
+
+internal class SepServerIPAddress : SoftEtherIPAddressProperty() {
+    override val key = SEP_SERVER_IP_ADDRESS
+}
+
 internal class SepUDPClientIP : SoftEtherIPAddressProperty() {
     override val key = SEP_UDP_CLIENT_IP
 }

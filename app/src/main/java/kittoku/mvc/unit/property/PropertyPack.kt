@@ -12,6 +12,35 @@ import kotlin.reflect.full.memberProperties
 internal class PropertyPack : DataUnit {
     internal val unknownPropertyKeys = mutableListOf<String>()
 
+    internal var sepBuild: SepBuild? = null
+    internal var sepVersion: SepVersion? = null
+    internal var sepUniqueIDCamel: SepUniqueIDCamel? = null
+    internal var sepUniqueIDSnake: SepUniqueIDSnake? = null
+    internal var sepClientBuild: SepClientBuild? = null
+    internal var sepClientID: SepClientID? = null
+    internal var sepClientStr: SepClientStr? = null
+    internal var sepClientVersion: SepClientVersion? = null
+    internal var sepClientHostname: SepClientHostname? = null
+    internal var sepClientIPAddress: SepClientIPAddress? = null
+    internal var sepClientOSName: SepClientOSName? = null
+    internal var sepClientOSVersion: SepClientOSVersion? = null
+    internal var sepClientPort: SepClientPort? = null
+    internal var sepClientProductBuild: SepClientProductBuild? = null
+    internal var sepClientProductName: SepClientProductName? = null
+    internal var sepClientProductVersion: SepClientProductVersion? = null
+    
+    internal var sepHello: SepHello? = null
+    
+    internal var sepProxyIPAddress: SepProxyIPAddress? =null
+    internal var sepProxyPort: SepProxyPort? = null
+
+    internal var sepServerHostname: SepServerHostname? = null
+    internal var sepServerIPAddress: SepServerIPAddress? = null
+    internal var sepServerPort: SepServerPort2? = null
+    internal var sepServerProductBuild: SepServerProductBuild? = null
+    internal var sepServerProductName: SepServerProductName? = null
+    internal var sepServerProductVersion: SepServerProductVersion? = null
+
     internal var sepMethod: SepMethod? = null
     internal var sepAuthType: SepAuthType? = null
     internal var sepUsername: SepUsername? = null
@@ -22,7 +51,6 @@ internal class PropertyPack : DataUnit {
     internal var sepUseCompress: SepUseCompress? = null
     internal var sepMaxConnection: SepMaxConnection? = null
     internal var sepHalfConnection: SepHalfConnection? = null
-    internal var sepClientProductName: SepClientProductName? = null
     internal var sepRandom: SepRandom? = null
     internal var sepPenCore: SepPenCore? = null
     internal var sepError: SepError? = null
@@ -79,6 +107,34 @@ internal class PropertyPack : DataUnit {
             }
 
             when (key) {
+                SEP_BUILD -> importProperty(SepBuild(), buffer)
+                SEP_VERSION -> importProperty(SepVersion(), buffer)
+                SEP_UNIQUE_ID_CAMEL -> importProperty(SepUniqueIDCamel(), buffer)
+                SEP_UNIQUE_ID_SNAKE -> importProperty(SepUniqueIDSnake(), buffer)
+                SEP_CLIENT_BUILD -> importProperty(SepClientBuild(), buffer)
+                SEP_CLIENT_ID -> importProperty(SepClientID(), buffer)
+                SEP_CLIENT_STR -> importProperty(SepClientStr(), buffer)
+                SEP_CLIENT_VER -> importProperty(SepClientVersion(), buffer)
+                SEP_CLIENT_HOSTNAME -> importProperty(SepClientHostname(), buffer)
+                SEP_CLIENT_IP_ADDRESS -> importProperty(SepClientIPAddress(), buffer)
+                SEP_CLIENT_OS_NAME -> importProperty(SepClientOSName(), buffer)
+                SEP_CLIENT_OS_VER -> importProperty(SepClientOSVersion(), buffer)
+                SEP_CLIENT_PORT -> importProperty(SepClientPort(), buffer)
+                SEP_CLIENT_PRODUCT_BUILD -> importProperty(SepClientProductBuild(), buffer)
+                SEP_CLIENT_PRODUCT_NAME -> importProperty(SepClientProductName(), buffer)
+                SEP_CLIENT_PRODUCT_VER -> importProperty(SepClientProductVersion(), buffer)
+                SEP_HELLO -> importProperty(SepHello(), buffer)
+
+                SEP_PROXY_IP_ADDRESS -> importProperty(SepProxyIPAddress(), buffer)
+                SEP_PROXY_PORT -> importProperty(SepProxyPort(), buffer)
+
+                SEP_SERVER_HOSTNAME -> importProperty(SepServerHostname(), buffer)
+                SEP_SERVER_IP_ADDRESS -> importProperty(SepServerIPAddress(), buffer)
+                SEP_SERVER_PORT2 -> importProperty(SepServerPort2(), buffer)
+                SEP_SERVER_PRODUCT_BUILD -> importProperty(SepServerProductBuild(), buffer)
+                SEP_SERVER_PRODUCT_NAME -> importProperty(SepServerProductName(), buffer)
+                SEP_SERVER_PRODUCT_VER -> importProperty(SepServerProductVersion(), buffer)
+
                 SEP_METHOD -> importProperty(SepMethod(), buffer)
                 SEP_AUTH_TYPE -> importProperty(SepAuthType(), buffer)
                 SEP_USERNAME -> importProperty(SepUsername(), buffer)
@@ -89,7 +145,6 @@ internal class PropertyPack : DataUnit {
                 SEP_USE_COMPRESS -> importProperty(SepUseCompress(), buffer)
                 SEP_MAX_CONNECTION -> importProperty(SepMaxConnection(), buffer)
                 SEP_HALF_CONNECTION -> importProperty(SepHalfConnection(), buffer)
-                SEP_CLIENT_PRODUCT_NAME -> importProperty(SepClientProductName(), buffer)
                 SEP_RANDOM -> importProperty(SepRandom(), buffer)
                 SEP_PEN_CORE -> importProperty(SepPenCore(), buffer)
                 SEP_ERROR -> importProperty(SepError(), buffer)

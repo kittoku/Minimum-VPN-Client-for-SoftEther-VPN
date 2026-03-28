@@ -40,6 +40,37 @@ internal open class SoftEtherAsciiProperty : SoftEtherProperty() {
     }
 }
 
+internal class SepClientStr : SoftEtherAsciiProperty() {
+    override val key = SEP_CLIENT_STR
+}
+
+internal class SepClientHostname : SoftEtherAsciiProperty() {
+    override val key = SEP_CLIENT_HOSTNAME
+}
+
+internal class SepClientOSName : SoftEtherAsciiProperty() {
+    override val key = SEP_CLIENT_OS_NAME
+}
+
+internal class SepClientOSVersion : SoftEtherAsciiProperty() {
+    override val key = SEP_CLIENT_OS_VER
+}
+
+internal class SepClientProductName : SoftEtherAsciiProperty() {
+    override val key = SEP_CLIENT_PRODUCT_NAME
+}
+
+internal class SepHello : SoftEtherAsciiProperty() {
+    override val key = SEP_HELLO
+}
+
+internal class SepServerHostname : SoftEtherAsciiProperty() {
+    override val key = SEP_SERVER_HOSTNAME
+}
+
+internal class SepServerProductName : SoftEtherAsciiProperty() {
+    override val key = SEP_SERVER_PRODUCT_NAME
+}
 internal class SepMethod : SoftEtherAsciiProperty() {
     override val key = SEP_METHOD
 }
@@ -52,6 +83,3 @@ internal class SepHubName : SoftEtherAsciiProperty() {
     override val key = SEP_HUB_NAME
 }
 
-internal class SepClientProductName : SoftEtherAsciiProperty() {
-    override val key = SEP_CLIENT_PRODUCT_NAME
-}

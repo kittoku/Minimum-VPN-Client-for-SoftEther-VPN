@@ -35,6 +35,14 @@ internal open class SoftEtherBytesProperty : SoftEtherProperty() {
     }
 }
 
+internal class SepUniqueIDCamel : SoftEtherBytesProperty() {
+    override val key = SEP_UNIQUE_ID_CAMEL
+}
+
+internal class SepUniqueIDSnake : SoftEtherBytesProperty() {
+    override val key = SEP_UNIQUE_ID_SNAKE
+}
+
 internal class SepPenCore : SoftEtherBytesProperty() {
     override val key = SEP_PEN_CORE
 }
