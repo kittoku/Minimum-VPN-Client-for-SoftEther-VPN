@@ -2,13 +2,18 @@ package kittoku.mvc.service.client
 
 import android.content.SharedPreferences
 import android.net.Uri
-import android.net.VpnService
+import androidx.core.net.toUri
 import kittoku.mvc.extension.nextBytes
 import kittoku.mvc.extension.read
 import kittoku.mvc.extension.toHexByteArray
 import kittoku.mvc.extension.toHexString
 import kittoku.mvc.preference.MvcPreference
-import kittoku.mvc.preference.accessor.*
+import kittoku.mvc.preference.accessor.getBooleanPrefValue
+import kittoku.mvc.preference.accessor.getIntPrefValue
+import kittoku.mvc.preference.accessor.getSetPrefValue
+import kittoku.mvc.preference.accessor.getStringPrefValue
+import kittoku.mvc.preference.accessor.setStringPrefValue
+import kittoku.mvc.service.SoftEtherVpnService
 import kittoku.mvc.service.teminal.udp.CHACHA20_POLY1305_NONCE_SIZE
 import kittoku.mvc.service.teminal.udp.CHACHA20_POLY1305_TAG_SIZE
 import kittoku.mvc.service.teminal.udp.UDPStatus
@@ -28,8 +33,6 @@ import kotlinx.coroutines.channels.Channel
 import java.net.Inet4Address
 import java.security.SecureRandom
 import javax.crypto.SecretKey
-import androidx.core.net.toUri
-import kittoku.mvc.service.SoftEtherVpnService
 import javax.net.ssl.SSLSocket
 
 
