@@ -1,16 +1,12 @@
 package kittoku.mvc.service.client
 
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
-import kittoku.mvc.R
 import kittoku.mvc.debug.ErrorCode
 import kittoku.mvc.debug.MvcException
 import kittoku.mvc.debug.assertAlways
-import kittoku.mvc.extension.*
+import kittoku.mvc.extension.clear
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.setBooleanPrefValue
-import kittoku.mvc.service.CHANNEL_ID
 import kittoku.mvc.service.client.arp.ARPClient
 import kittoku.mvc.service.client.dhcp.DhcpClient
 import kittoku.mvc.service.client.softether.SoftEtherClient
@@ -20,11 +16,14 @@ import kittoku.mvc.service.teminal.ip.IPTerminal
 import kittoku.mvc.service.teminal.tcp.TCPTerminal
 import kittoku.mvc.service.teminal.udp.UDPStatus
 import kittoku.mvc.service.teminal.udp.UDPTerminal
-import kittoku.mvc.unit.ethernet.*
+import kittoku.mvc.unit.ethernet.EthernetFrame
 import kittoku.mvc.unit.http.HttpMessage
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 
 
 internal class ControlClient(private val bridge: ClientBridge) {
@@ -253,19 +252,6 @@ internal class ControlClient(private val bridge: ClientBridge) {
         }
     }
 
-    private fun notify(message: String) {
-        val builder = NotificationCompat.Builder(bridge.service, CHANNEL_ID).also {
-            it.setSmallIcon(R.drawable.ic_baseline_vpn_lock_24)
-            it.priority = NotificationCompat.PRIORITY_DEFAULT
-            it.setAutoCancel(true)
-            it.setStyle(NotificationCompat.BigTextStyle().bigText(message))
-        }
-
-        NotificationManagerCompat.from(bridge.service).also {
-            it.notify(0, builder.build())
-        }
-    }
-
     internal fun kill(throwable: Throwable?) {
         bridge.scope.launch {
             mutex.withLock {
@@ -280,8 +266,8 @@ internal class ControlClient(private val bridge: ClientBridge) {
                             "UNKNOWN EXCEPTION/ERROR"
                         }
 
-                        notify(message)
                         logWriter?.reportThrowable(throwable)
+                        bridge.service.notifyError(message)
                     }
 
                     isClosing = true
