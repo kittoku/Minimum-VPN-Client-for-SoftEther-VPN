@@ -2,7 +2,7 @@ package kittoku.mvc.preference.accessor
 
 import android.content.SharedPreferences
 import kittoku.mvc.preference.MvcPreference
-import kittoku.mvc.unit.ethernet.ETHERNET_MAX_MTU
+import kittoku.mvc.unit.ETHERNET_MAX_MTU
 
 
 internal fun getIntPrefValue(key: MvcPreference, prefs: SharedPreferences): Int {

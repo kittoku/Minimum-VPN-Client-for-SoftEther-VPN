@@ -2,7 +2,7 @@ package kittoku.mvc.unit.property
 
 import kittoku.mvc.debug.assertAlways
 import kittoku.mvc.extension.read
-import kittoku.mvc.unit.ip.IPv4_ADDRESS_SIZE
+import kittoku.mvc.unit.IPv4_ADDRESS_SIZE
 import java.nio.ByteBuffer
 
 

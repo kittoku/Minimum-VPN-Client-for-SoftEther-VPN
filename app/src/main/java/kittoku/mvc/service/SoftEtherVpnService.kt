@@ -14,8 +14,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
 import kittoku.mvc.R
-import kittoku.mvc.service.client.ClientBridge
-import kittoku.mvc.service.client.ControlClient
+import kittoku.mvc.SharedBridge
+import kittoku.mvc.control.Controller
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +38,7 @@ internal const val NOTIFICATION_CERTIFICATE_ID = 4
 
 internal class SoftEtherVpnService : VpnService() {
     private lateinit var notificationManager: NotificationManagerCompat
-    private var client: ControlClient? = null
+    private var client: Controller? = null
 
     override fun onCreate() {
         notificationManager = NotificationManagerCompat.from(this)
@@ -47,7 +47,7 @@ internal class SoftEtherVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return if (ACTION_VPN_CONNECT == intent?.action ?: false) {
             client?.kill(null)
-            client = ControlClient(createBridge()).also {
+            client = Controller(createBridge()).also {
                 beForegrounded()
                 it.run()
             }
@@ -61,7 +61,7 @@ internal class SoftEtherVpnService : VpnService() {
         }
     }
 
-    private fun createBridge(): ClientBridge {
+    private fun createBridge(): SharedBridge {
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
         val handler = CoroutineExceptionHandler { _, throwable ->
@@ -69,7 +69,7 @@ internal class SoftEtherVpnService : VpnService() {
             client = null
         }
 
-        val bridge = ClientBridge(scope, handler)
+        val bridge = SharedBridge(scope, handler)
 
         bridge.service = this
         bridge.prepareParameters(PreferenceManager.getDefaultSharedPreferences(this))

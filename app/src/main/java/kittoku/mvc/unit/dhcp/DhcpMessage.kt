@@ -3,8 +3,8 @@ package kittoku.mvc.unit.dhcp
 import kittoku.mvc.debug.assertAlways
 import kittoku.mvc.extension.move
 import kittoku.mvc.extension.padZeroByte
+import kittoku.mvc.unit.ARP_MAC_ADDRESS_SIZE
 import kittoku.mvc.unit.DataUnit
-import kittoku.mvc.unit.arp.ARP_MAC_ADDRESS_SIZE
 import java.nio.ByteBuffer
 import kotlin.math.max
 

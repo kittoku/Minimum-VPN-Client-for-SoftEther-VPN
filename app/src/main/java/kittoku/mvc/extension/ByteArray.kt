@@ -1,6 +1,6 @@
 package kittoku.mvc.extension
 
-import kittoku.mvc.unit.ip.IPv4_ADDRESS_SIZE
+import kittoku.mvc.unit.IPv4_ADDRESS_SIZE
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.charset.Charset

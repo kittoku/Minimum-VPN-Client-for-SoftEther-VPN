@@ -1,15 +1,22 @@
 package kittoku.mvc
 
-import kittoku.mvc.extension.*
-import kittoku.mvc.hash.hashSha0
-import kittoku.mvc.service.client.ClientBridge
-import kittoku.mvc.service.client.ControlClient
-import kittoku.mvc.service.client.UDPAccelerationConfig
-import kittoku.mvc.service.teminal.udp.UDP_NATT_IP_REGEX
-import kittoku.mvc.service.teminal.udp.UDP_NATT_PORT_REGEX
-import kittoku.mvc.unit.ip.IPv4Packet
-import kittoku.mvc.unit.udp.UDPDatagram
-import kotlinx.coroutines.*
+import kittoku.mvc.cipher.hashSha0
+import kittoku.mvc.control.Controller
+import kittoku.mvc.extension.isSame
+import kittoku.mvc.extension.read
+import kittoku.mvc.extension.search
+import kittoku.mvc.extension.toHexByteArray
+import kittoku.mvc.extension.toHexString
+import kittoku.mvc.teminal.UDP_NATT_IP_REGEX
+import kittoku.mvc.teminal.UDP_NATT_PORT_REGEX
+import kittoku.mvc.unit.IPv4Packet
+import kittoku.mvc.unit.UDPDatagram
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import java.nio.ByteBuffer
 import kotlin.reflect.KMutableProperty1
@@ -19,12 +26,12 @@ import kotlin.reflect.jvm.isAccessible
 
 
 class MvcTest {
-    private fun createTestBridge(scope: CoroutineScope): ClientBridge {
+    private fun createTestBridge(scope: CoroutineScope): SharedBridge {
         val handler = CoroutineExceptionHandler { _, exception ->
             throw exception
         }
 
-        return ClientBridge(scope, handler).also {
+        return SharedBridge(scope, handler).also {
             it.isTest = true
 
             it.serverPort = System.getenv("TEST_PORT")?.toInt() ?: 443
@@ -47,7 +54,7 @@ class MvcTest {
     fun testControlClient() {
         runBlocking {
             val bridge = createTestBridge(CoroutineScope(Dispatchers.IO + SupervisorJob()))
-            val client = ControlClient(bridge)
+            val client = Controller(bridge)
 
             client.run()
             delay(10_000)
@@ -59,7 +66,7 @@ class MvcTest {
         runBlocking {
             val bridge = createTestBridge(CoroutineScope(Dispatchers.IO + SupervisorJob()))
             bridge.udpAccelerationConfig = UDPAccelerationConfig(bridge.random)
-            val client = ControlClient(bridge)
+            val client = Controller(bridge)
 
             client.run()
             delay(10_000)
