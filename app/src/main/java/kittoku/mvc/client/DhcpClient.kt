@@ -22,12 +22,15 @@ import kittoku.mvc.unit.dhcp.DHCP_MESSAGE_TYPE_DISCOVER
 import kittoku.mvc.unit.dhcp.DHCP_MESSAGE_TYPE_OFFER
 import kittoku.mvc.unit.dhcp.DHCP_MESSAGE_TYPE_REQUEST
 import kittoku.mvc.unit.dhcp.DHCP_OPCODE_BOOT_REQUEST
+import kittoku.mvc.unit.dhcp.DHCP_OPTION_DHCP_SERVER_ADDRESS
 import kittoku.mvc.unit.dhcp.DHCP_OPTION_DNS_SERVER_ADDRESS
+import kittoku.mvc.unit.dhcp.DHCP_OPTION_LEASE_TIME
+import kittoku.mvc.unit.dhcp.DHCP_OPTION_MESSAGE_TYPE
+import kittoku.mvc.unit.dhcp.DHCP_OPTION_PARAMETER_LIST
+import kittoku.mvc.unit.dhcp.DHCP_OPTION_REQUESTED_ADDRESS
 import kittoku.mvc.unit.dhcp.DHCP_OPTION_ROUTER_ADDRESS
 import kittoku.mvc.unit.dhcp.DHCP_OPTION_SUBNET_MASK
 import kittoku.mvc.unit.dhcp.DhcpMessage
-import kittoku.mvc.unit.dhcp.DhcpOptionParameterList
-import kittoku.mvc.unit.dhcp.DhcpOptionRequestedAddress
 import kittoku.mvc.unit.dhcp.OptionPack
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -56,11 +59,11 @@ internal class DhcpClient(private val bridge: SharedBridge) {
     }
 
     private fun prepareBasicOptionsParameters(): ByteArray {
-        val parameters = mutableListOf<Byte>()
-
-        parameters.add(DHCP_OPTION_SUBNET_MASK)
-        parameters.add(DHCP_OPTION_ROUTER_ADDRESS)
-        parameters.add(DHCP_OPTION_DNS_SERVER_ADDRESS)
+        val parameters = listOf(
+            DHCP_OPTION_SUBNET_MASK,
+            DHCP_OPTION_ROUTER_ADDRESS,
+            DHCP_OPTION_DNS_SERVER_ADDRESS,
+        )
 
         return parameters.toByteArray()
     }
@@ -125,7 +128,7 @@ internal class DhcpClient(private val bridge: SharedBridge) {
             val reply = extractMessageToMe(received) ?: continue
             if (reply.transactionId != transactionId) continue
 
-            return if (reply.options.messageType == DHCP_MESSAGE_TYPE_OFFER) {
+            return if (reply.options.byteOptions[DHCP_OPTION_MESSAGE_TYPE] == DHCP_MESSAGE_TYPE_OFFER) {
                 reply
             } else null
         }
@@ -136,7 +139,7 @@ internal class DhcpClient(private val bridge: SharedBridge) {
             val reply = extractMessageToMe(bridge.dhcpChannel.receive()) ?: continue
             if (reply.transactionId != transactionId) continue
 
-            return if (reply.options.messageType == DHCP_MESSAGE_TYPE_ACK) {
+            return if (reply.options.byteOptions[DHCP_OPTION_MESSAGE_TYPE] == DHCP_MESSAGE_TYPE_ACK) {
                 reply
             } else null
         }
@@ -147,10 +150,8 @@ internal class DhcpClient(private val bridge: SharedBridge) {
              val transactionId = bridge.random.nextInt()
 
              val options = OptionPack().also {
-                 it.messageType = DHCP_MESSAGE_TYPE_DISCOVER
-                 it.optionParameterList = DhcpOptionParameterList().also { option ->
-                     option.value = prepareBasicOptionsParameters()
-                 }
+                 it.byteOptions[DHCP_OPTION_MESSAGE_TYPE] = DHCP_MESSAGE_TYPE_DISCOVER
+                 it.variableOptions[DHCP_OPTION_PARAMETER_LIST] = prepareBasicOptionsParameters()
              }
 
              val message = DhcpMessage().also {
@@ -168,14 +169,10 @@ internal class DhcpClient(private val bridge: SharedBridge) {
     private suspend fun startRequestAckSequence(offer: DhcpMessage, timeout: Long): DhcpMessage? {
         return withTimeoutOrNull(timeout) {
             val options = OptionPack().also {
-                it.messageType = DHCP_MESSAGE_TYPE_REQUEST
-                it.optionRequestedAddress = DhcpOptionRequestedAddress().also { option ->
-                    option.address.read(offer.yourIpAddress)
-                }
-                it.optionDhcpServerAddress = offer.options.optionDhcpServerAddress
-                it.optionParameterList = DhcpOptionParameterList().also { option ->
-                    option.value = prepareBasicOptionsParameters()
-                }
+                it.byteOptions[DHCP_OPTION_MESSAGE_TYPE] = DHCP_MESSAGE_TYPE_REQUEST
+                it.addressOptions[DHCP_OPTION_REQUESTED_ADDRESS] = offer.yourIpAddress.copy()
+                it.addressOptions[DHCP_OPTION_DHCP_SERVER_ADDRESS] = offer.options.addressOptions[DHCP_OPTION_DHCP_SERVER_ADDRESS]!!.copy()
+                it.variableOptions[DHCP_OPTION_PARAMETER_LIST] = prepareBasicOptionsParameters()
             }
 
             val message = DhcpMessage().also {
@@ -194,26 +191,26 @@ internal class DhcpClient(private val bridge: SharedBridge) {
         if (ack.yourIpAddress.isSame(IPv4_UNKNOWN_ADDRESS)) return false
         bridge.assignedIpAddress.read(ack.yourIpAddress)
 
-        val subnetMask = ack.options.optionSubnetMask?.address ?: return false
+        val subnetMask = ack.options.addressOptions[DHCP_OPTION_SUBNET_MASK] ?: return false
         if (subnetMask.isSame(IPv4_UNKNOWN_ADDRESS)) return false
         bridge.subnetMask.read(subnetMask)
 
-        val defaultGatewayAddress = ack.options.optionRouterAddress?.address ?: return false
+        val defaultGatewayAddress = ack.options.addressOptions[DHCP_OPTION_ROUTER_ADDRESS] ?: return false
         if (defaultGatewayAddress.isSame(IPv4_UNKNOWN_ADDRESS)) return false
         bridge.defaultGatewayIpAddress.read(defaultGatewayAddress)
 
-        val dhcpServerAddress = ack.options.optionDhcpServerAddress?.address ?: return false
+        val dhcpServerAddress = ack.options.addressOptions[DHCP_OPTION_DHCP_SERVER_ADDRESS] ?: return false
         if (dhcpServerAddress.isSame(IPv4_UNKNOWN_ADDRESS)) return false
         bridge.dhcpServerIpAddress.read(dhcpServerAddress)
 
-        ack.options.optionDnsServerAddress?.also {
-            if (it.address.isSame(IPv4_UNKNOWN_ADDRESS)) return false
-            bridge.dnsServerIpAddress = it.address.copy()
+        ack.options.addressOptions[DHCP_OPTION_DNS_SERVER_ADDRESS]?.also {
+            if (it.isSame(IPv4_UNKNOWN_ADDRESS)) return false
+            bridge.dnsServerIpAddress = it.copy()
         }
 
-        ack.options.optionLeaseTime?.also {
-            if (it.length < 0) return false
-            bridge.leaseTime = it.length.toLong() * 1_000 // as millisecond
+        ack.options.intOptions[DHCP_OPTION_LEASE_TIME]?.also {
+            if (it < 0) return false
+            bridge.leaseTime = it.toLong() * 1_000 // as millisecond
         }
 
         return true

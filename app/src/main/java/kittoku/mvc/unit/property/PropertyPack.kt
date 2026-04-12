@@ -2,91 +2,121 @@ package kittoku.mvc.unit.property
 
 import kittoku.mvc.debug.assertAlways
 import kittoku.mvc.extension.move
+import kittoku.mvc.extension.reversed
 import kittoku.mvc.unit.DataUnit
+import kittoku.mvc.unit.IPv4_ADDRESS_SIZE
 import java.nio.ByteBuffer
-import kotlin.reflect.KMutableProperty1
-import kotlin.reflect.KProperty1
-import kotlin.reflect.full.memberProperties
 
+
+private const val FIXED_HEADER_SIZE = 3 * Int.SIZE_BYTES // 12 = keySize + valueType + valueNum
 
 internal class PropertyPack : DataUnit {
+    internal val booleanProperties = mutableMapOf<String, Boolean>()
+    internal val intProperties = mutableMapOf<String, Int>()
+    internal val longProperties = mutableMapOf<String, Long>()
+    internal val addressProperties = mutableMapOf<String, ByteArray>()
+    internal val bytesProperties = mutableMapOf<String, ByteArray>()
+    internal val asciiProperties = mutableMapOf<String, String>()
+    internal val utf8Properties = mutableMapOf<String, String>()
+
     internal val unknownPropertyKeys = mutableListOf<String>()
 
-    internal var sepBuild: SepBuild? = null
-    internal var sepVersion: SepVersion? = null
-    internal var sepUniqueIDCamel: SepUniqueIDCamel? = null
-    internal var sepUniqueIDSnake: SepUniqueIDSnake? = null
-    internal var sepClientBuild: SepClientBuild? = null
-    internal var sepClientID: SepClientID? = null
-    internal var sepClientStr: SepClientStr? = null
-    internal var sepClientVersion: SepClientVersion? = null
-    internal var sepClientHostname: SepClientHostname? = null
-    internal var sepClientIPAddress: SepClientIPAddress? = null
-    internal var sepClientOSName: SepClientOSName? = null
-    internal var sepClientOSVersion: SepClientOSVersion? = null
-    internal var sepClientPort: SepClientPort? = null
-    internal var sepClientProductBuild: SepClientProductBuild? = null
-    internal var sepClientProductName: SepClientProductName? = null
-    internal var sepClientProductVersion: SepClientProductVersion? = null
-    
-    internal var sepHello: SepHello? = null
-    
-    internal var sepProxyIPAddress: SepProxyIPAddress? =null
-    internal var sepProxyPort: SepProxyPort? = null
-
-    internal var sepServerHostname: SepServerHostname? = null
-    internal var sepServerIPAddress: SepServerIPAddress? = null
-    internal var sepServerPort: SepServerPort2? = null
-    internal var sepServerProductBuild: SepServerProductBuild? = null
-    internal var sepServerProductName: SepServerProductName? = null
-    internal var sepServerProductVersion: SepServerProductVersion? = null
-
-    internal var sepMethod: SepMethod? = null
-    internal var sepAuthType: SepAuthType? = null
-    internal var sepUsername: SepUsername? = null
-    internal var sepSecurePassword: SepSecurePassword? = null
-    internal var sepProtocol: SepProtocol? = null
-    internal var sepHubName: SepHubName? = null
-    internal var sepUseEncrypt: SepUseEncrypt? = null
-    internal var sepUseCompress: SepUseCompress? = null
-    internal var sepMaxConnection: SepMaxConnection? = null
-    internal var sepHalfConnection: SepHalfConnection? = null
-    internal var sepRandom: SepRandom? = null
-    internal var sepPenCore: SepPenCore? = null
-    internal var sepError: SepError? = null
-
-    internal var sepUseUDPAcceleration: SepUseUDPAcceleration? = null
-    internal var sepUDPUseEncryption: SepUDPUseEncryption? = null
-    internal var sepUDPVersion: SepUDPVersion? = null
-    internal var sepUDPMaxVersion: SepUDPMaxVersion? = null
-    internal var sepUDPClientIP: SepUDPClientIP? = null
-    internal var sepUDPClientPort: SepUDPClientPort? = null
-    internal var sepUDPClientKeyV2: SepUDPClientKeyV2? = null
-    internal var sepUDPClientCookie: SepUDPClientCookie? = null
-    internal var sepUDPServerIP: SepUDPServerIP? = null
-    internal var sepUDPServerPort: SepUDPServerPort? = null
-    internal var sepUDPServerKeyV2: SepUDPServerKeyV2? = null
-    internal var sepUDPServerCookie: SepUDPServerCookie? = null
-    internal var sepUDPSupportFastDisconnectDetect: SepUDPSupportFastDisconnectDetect? = null
-    internal var sepUDPEnableFastDisconnectDetect: SepUDPEnableFastDisconnectDetect? = null
-
     override val length: Int
-        get() = Int.SIZE_BYTES + validProperties.map { it.length }.sum()
+        get() { // Int.SIZE_BYTES + validProperties.map { it.length }.sum()
+            var sum = 4
 
-    private val validProperties: List<SoftEtherProperty>
-        get() = this::class.memberProperties.filter {
-            it.name.startsWith("sep")
-        }.mapNotNull {
-            @Suppress("UNCHECKED_CAST")
-            it as KProperty1<PropertyPack, SoftEtherProperty?>
-            it.get(this)
+            booleanProperties.forEach { (key, _) -> sum += FIXED_HEADER_SIZE + key.length + Int.SIZE_BYTES }
+            intProperties.forEach { (key, _) -> sum += FIXED_HEADER_SIZE + key.length + Int.SIZE_BYTES }
+            longProperties.forEach { (key, _) -> sum += FIXED_HEADER_SIZE + key.length + Long.SIZE_BYTES }
+            addressProperties.forEach { (key, _) -> sum += FIXED_HEADER_SIZE + key.length + IPv4_ADDRESS_SIZE }
+            bytesProperties.forEach { (key, value) -> sum += FIXED_HEADER_SIZE + key.length + Int.SIZE_BYTES + value.size }
+            asciiProperties.forEach { (key, value) -> sum += FIXED_HEADER_SIZE + key.length + Int.SIZE_BYTES + value.length }
+            utf8Properties.forEach { (key, value) -> sum += FIXED_HEADER_SIZE + key.length + Int.SIZE_BYTES + value.toByteArray(Charsets.UTF_8).size }
+
+            return sum
         }
 
+    private fun writeHeader(key: String, valueType: Int, valueNum: Int, buffer: ByteBuffer) {
+        buffer.putInt(key.length + 1)
+        buffer.put(key.toByteArray(Charsets.US_ASCII))
+        buffer.putInt(valueType)
+        buffer.putInt(valueNum)
+    }
+
+    private fun readHeader(valueType: Int, valueNum: Int, buffer: ByteBuffer) {
+        assertAlways(buffer.int == valueType)
+        assertAlways(buffer.int == valueNum)
+    }
+
     override fun write(buffer: ByteBuffer) {
-        validProperties.also {
-            buffer.putInt(it.size)
-            it.forEach { sep ->
-                sep.write(buffer)
+        var numProperties = 0
+
+        arrayOf<MutableMap<String, *>>(
+            booleanProperties, intProperties, longProperties, addressProperties, bytesProperties, asciiProperties, utf8Properties
+        ).forEach {
+            numProperties += it.size
+        }
+
+        buffer.putInt(numProperties)
+
+
+        booleanProperties.forEach { (key, value) ->
+            assertAlways(key in SOFTETHER_BOOLEAN_PROPERTIES)
+            writeHeader(key, SEP_INT_TYPE, 1, buffer)
+            buffer.putInt(if (value) 1 else 0)
+        }
+
+        intProperties.forEach { (key, value) ->
+            if (key in SOFTETHER_BE_INT_PROPERTIES) {
+                writeHeader(key, SEP_INT_TYPE, 1, buffer)
+                buffer.putInt(value)
+            } else {
+                assertAlways(key in SOFTETHER_LE_INT_PROPERTIES)
+                writeHeader(key, SEP_INT_TYPE, 1, buffer)
+                buffer.putInt(value.reversed())
+            }
+        }
+
+        longProperties.forEach { (key, value) ->
+            assertAlways(key in SOFTETHER_LONG_PROPERTIES)
+            writeHeader(key, SEP_LONG_TYPE, 1, buffer)
+            buffer.putLong(value)
+        }
+
+        addressProperties.forEach { (key, value) ->
+            assertAlways(key in SOFTETHER_ADDRESS_PROPERTIES)
+            assertAlways(value.size == IPv4_ADDRESS_SIZE)
+            writeHeader(key, SEP_INT_TYPE, 1, buffer)
+            buffer.put(value.reversedArray())
+        }
+
+        bytesProperties.forEach { (key, value) ->
+            if (key in SOFTETHER_160BITS_PROPERTIES) {
+                assertAlways(value.size == 20)
+            } else {
+                assertAlways(key in SOFTETHER_BYTES_PROPERTIES)
+            }
+
+            writeHeader(key, SEP_BYTES_TYPE, 1, buffer)
+            buffer.putInt(value.size)
+            buffer.put(value)
+        }
+
+        asciiProperties.forEach { (key, value) ->
+            assertAlways(key in SOFTETHER_ASCII_PROPERTIES)
+            writeHeader(key, SEP_ASCII_TYPE ,1, buffer)
+            value.toByteArray(Charsets.US_ASCII).also {
+                buffer.putInt(it.size)
+                buffer.put(it)
+            }
+        }
+
+        utf8Properties.forEach { (key, value) ->
+            assertAlways(key in SOFTETHER_UTF8_PROPERTIES)
+            writeHeader(key, SEP_UTF8_TYPE ,1, buffer)
+            value.toByteArray(Charsets.UTF_8).also {
+                buffer.putInt(it.size)
+                buffer.put(it)
             }
         }
     }
@@ -107,62 +137,72 @@ internal class PropertyPack : DataUnit {
             }
 
             when (key) {
-                SEP_BUILD -> importProperty(SepBuild(), buffer)
-                SEP_VERSION -> importProperty(SepVersion(), buffer)
-                SEP_UNIQUE_ID_CAMEL -> importProperty(SepUniqueIDCamel(), buffer)
-                SEP_UNIQUE_ID_SNAKE -> importProperty(SepUniqueIDSnake(), buffer)
-                SEP_CLIENT_BUILD -> importProperty(SepClientBuild(), buffer)
-                SEP_CLIENT_ID -> importProperty(SepClientID(), buffer)
-                SEP_CLIENT_STR -> importProperty(SepClientStr(), buffer)
-                SEP_CLIENT_VER -> importProperty(SepClientVersion(), buffer)
-                SEP_CLIENT_HOSTNAME -> importProperty(SepClientHostname(), buffer)
-                SEP_CLIENT_IP_ADDRESS -> importProperty(SepClientIPAddress(), buffer)
-                SEP_CLIENT_OS_NAME -> importProperty(SepClientOSName(), buffer)
-                SEP_CLIENT_OS_VER -> importProperty(SepClientOSVersion(), buffer)
-                SEP_CLIENT_PORT -> importProperty(SepClientPort(), buffer)
-                SEP_CLIENT_PRODUCT_BUILD -> importProperty(SepClientProductBuild(), buffer)
-                SEP_CLIENT_PRODUCT_NAME -> importProperty(SepClientProductName(), buffer)
-                SEP_CLIENT_PRODUCT_VER -> importProperty(SepClientProductVersion(), buffer)
-                SEP_HELLO -> importProperty(SepHello(), buffer)
+                in SOFTETHER_BOOLEAN_PROPERTIES -> {
+                    readHeader(SEP_INT_TYPE, 1, buffer)
+                    booleanProperties[key] = buffer.int != 0
+                }
 
-                SEP_PROXY_IP_ADDRESS -> importProperty(SepProxyIPAddress(), buffer)
-                SEP_PROXY_PORT -> importProperty(SepProxyPort(), buffer)
+                in SOFTETHER_BE_INT_PROPERTIES -> {
+                    readHeader(SEP_INT_TYPE, 1, buffer)
+                    intProperties[key] = buffer.int
+                }
 
-                SEP_SERVER_HOSTNAME -> importProperty(SepServerHostname(), buffer)
-                SEP_SERVER_IP_ADDRESS -> importProperty(SepServerIPAddress(), buffer)
-                SEP_SERVER_PORT2 -> importProperty(SepServerPort2(), buffer)
-                SEP_SERVER_PRODUCT_BUILD -> importProperty(SepServerProductBuild(), buffer)
-                SEP_SERVER_PRODUCT_NAME -> importProperty(SepServerProductName(), buffer)
-                SEP_SERVER_PRODUCT_VER -> importProperty(SepServerProductVersion(), buffer)
+                in SOFTETHER_LE_INT_PROPERTIES -> {
+                    readHeader(SEP_INT_TYPE, 1, buffer)
+                    intProperties[key] = buffer.int.reversed()
+                }
 
-                SEP_METHOD -> importProperty(SepMethod(), buffer)
-                SEP_AUTH_TYPE -> importProperty(SepAuthType(), buffer)
-                SEP_USERNAME -> importProperty(SepUsername(), buffer)
-                SEP_SECURE_PASSWORD -> importProperty(SepSecurePassword(), buffer)
-                SEP_PROTOCOL -> importProperty(SepProtocol(), buffer)
-                SEP_HUB_NAME -> importProperty(SepHubName(), buffer)
-                SEP_USE_ENCRYPT -> importProperty(SepUseEncrypt(), buffer)
-                SEP_USE_COMPRESS -> importProperty(SepUseCompress(), buffer)
-                SEP_MAX_CONNECTION -> importProperty(SepMaxConnection(), buffer)
-                SEP_HALF_CONNECTION -> importProperty(SepHalfConnection(), buffer)
-                SEP_RANDOM -> importProperty(SepRandom(), buffer)
-                SEP_PEN_CORE -> importProperty(SepPenCore(), buffer)
-                SEP_ERROR -> importProperty(SepError(), buffer)
+                in SOFTETHER_LONG_PROPERTIES -> {
+                    readHeader(SEP_LONG_TYPE, 1, buffer)
+                    longProperties[key] = buffer.long
+                }
 
-                SEP_USE_UDP_ACCELERATION -> importProperty(SepUseUDPAcceleration(), buffer)
-                SEP_UDP_USE_ENCRYPTION -> importProperty(SepUDPUseEncryption(), buffer)
-                SEP_UDP_VERSION -> importProperty(SepUDPVersion(), buffer)
-                SEP_UDP_MAX_VERSION -> importProperty(SepUDPMaxVersion(), buffer)
-                SEP_UDP_CLIENT_IP -> importProperty(SepUDPClientIP(), buffer)
-                SEP_UDP_CLIENT_PORT -> importProperty(SepUDPClientPort(), buffer)
-                SEP_UDP_CLIENT_KEY_V2 -> importProperty(SepUDPClientKeyV2(), buffer)
-                SEP_UDP_CLIENT_COOKIE -> importProperty(SepUDPClientCookie(), buffer)
-                SEP_UDP_SERVER_IP -> importProperty(SepUDPServerIP(), buffer)
-                SEP_UDP_SERVER_PORT -> importProperty(SepUDPServerPort(), buffer)
-                SEP_UDP_SERVER_KEY_V2 -> importProperty(SepUDPServerKeyV2(), buffer)
-                SEP_UDP_SERVER_COOKIE -> importProperty(SepUDPServerCookie(), buffer)
-                SEP_UDP_SUPPORT_FAST_DISCONNECT_DETECT -> importProperty(SepUDPSupportFastDisconnectDetect(), buffer)
-                SEP_UDP_ENABLE_FAST_DISCONNECT_DETECT -> importProperty(SepUDPEnableFastDisconnectDetect(), buffer)
+                in SOFTETHER_ADDRESS_PROPERTIES -> {
+                    readHeader(SEP_INT_TYPE, 1, buffer)
+                    val reversed = ByteArray(IPv4_ADDRESS_SIZE)
+                    buffer.get(reversed)
+                    addressProperties[key] = reversed.reversedArray()
+                }
+
+                in SOFTETHER_BYTES_PROPERTIES -> {
+                    readHeader(SEP_BYTES_TYPE, 1, buffer)
+                    val size = buffer.int
+                    assertAlways(size >= 0)
+                    ByteArray(size).also {
+                        buffer.get(it)
+                        bytesProperties[key] = it
+                    }
+                }
+
+                in SOFTETHER_160BITS_PROPERTIES -> {
+                    readHeader(SEP_BYTES_TYPE, 1, buffer)
+                    val size = buffer.int
+                    assertAlways(size == 20)
+                    ByteArray(size).also {
+                        buffer.get(it)
+                        bytesProperties[key] = it
+                    }
+                }
+
+                in SOFTETHER_ASCII_PROPERTIES -> {
+                    readHeader(SEP_ASCII_TYPE, 1, buffer)
+                    val size = buffer.int
+                    assertAlways(size >= 0)
+                    ByteArray(size).also {
+                        buffer.get(it)
+                        asciiProperties[key] = it.toString(Charsets.US_ASCII)
+                    }
+                }
+
+                in SOFTETHER_UTF8_PROPERTIES -> {
+                    readHeader(SEP_UTF8_TYPE, 1, buffer)
+                    val size = buffer.int
+                    assertAlways(size >= 0)
+                    ByteArray(size).also {
+                        buffer.get(it)
+                        asciiProperties[key] = it.toString(Charsets.UTF_8)
+                    }
+                }
 
                 else -> {
                     unknownPropertyKeys.add(key)
@@ -172,32 +212,17 @@ internal class PropertyPack : DataUnit {
         }
     }
 
-    private fun importProperty(property: SoftEtherProperty, buffer: ByteBuffer) {
-        val targetPropertyName = "sep" + property::class.simpleName!!.substring(3)
-        val kProperty = this::class.memberProperties.first { it.name == targetPropertyName }
-
-        @Suppress("UNCHECKED_CAST")
-        kProperty as KMutableProperty1<PropertyPack, SoftEtherProperty?>
-
-        assertAlways(kProperty.get(this) == null) // avoid key duplication
-
-        property.read(buffer)
-
-        kProperty.set(this, property)
-    }
-
     private fun discardProperty(buffer: ByteBuffer) {
-        val unknownProperty = when (buffer.int) {
-            SEP_INT_TYPE -> SoftEtherIntProperty()
-            SEP_BYTES_TYPE -> SoftEtherBytesProperty()
-            SEP_ASCII_TYPE -> SoftEtherAsciiProperty()
-            SEP_UTF8_TYPE -> SoftEtherUtf8Property()
-            SEP_LONG_TYPE -> SoftEtherLongProperty()
+        when (buffer.int) {
+            SEP_INT_TYPE -> buffer.move(Int.SIZE_BYTES * 2)
+            SEP_LONG_TYPE -> buffer.move(Int.SIZE_BYTES + Long.SIZE_BYTES)
+            SEP_BYTES_TYPE, SEP_ASCII_TYPE, SEP_UTF8_TYPE -> {
+                buffer.move(Int.SIZE_BYTES)
+                val size = buffer.int
+                assertAlways(size >= 0)
+                buffer.move(size)
+            }
             else -> throw NotImplementedError()
         }
-
-        buffer.move(-Int.SIZE_BYTES)
-
-        unknownProperty.read(buffer)
     }
 }

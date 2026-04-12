@@ -30,11 +30,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 
 internal class Controller(private val bridge: SharedBridge) {
-    private lateinit var tcpTerminal: TCPTerminal
-    private lateinit var ipTerminal: IPTerminal
+    private var tcpTerminal: TCPTerminal? = null
+    private var ipTerminal: IPTerminal? = null
     private var udpTerminal: UDPTerminal? = null
 
-    private lateinit var networkObserver: NetworkObserver
+    private var networkObserver: NetworkObserver? = null
     private var logWriter: LogWriter? = null
 
     private lateinit var softEtherClient: SoftEtherClient
@@ -46,11 +46,11 @@ internal class Controller(private val bridge: SharedBridge) {
     private var isClosing = false
     private val mutex = Mutex()
 
-    private lateinit var jobMain: Job
-    private lateinit var jobControlUnit: Job
-    private lateinit var jobTCPIncoming: Job
-    private lateinit var jobUDPIncoming: Job
-    private lateinit var jobOutgoing: Job
+    private var jobMain: Job? = null
+    private var jobControlUnit: Job? = null
+    private var jobTCPIncoming: Job? = null
+    private var jobUDPIncoming: Job? = null
+    private var jobOutgoing: Job? = null
 
     internal fun run() {
         if (bridge.isLogEnabled && bridge.logDirectory != null) {
@@ -90,7 +90,7 @@ internal class Controller(private val bridge: SharedBridge) {
 
 
             // start to keep alive tcp
-            tcpTerminal.launchJobKeepAlive()
+            tcpTerminal!!.launchJobKeepAlive()
 
 
             // DHCP negotiation
@@ -138,9 +138,9 @@ internal class Controller(private val bridge: SharedBridge) {
 
 
             // Establish VPN connection
-            tcpTerminal.setTimeoutForData()
-            ipTerminal.initializeBuilder()
-            ipTerminal.launchJobRetrieve()
+            tcpTerminal!!.setTimeoutForData()
+            ipTerminal!!.initializeBuilder()
+            ipTerminal!!.launchJobRetrieve()
             launchJobOutgoing()
             launchJobTCPIncoming()
             bridge.udpAccelerationConfig?.also {
@@ -165,11 +165,11 @@ internal class Controller(private val bridge: SharedBridge) {
             while (isActive) {
                 when (val received = bridge.controlChannel.receive()) {
                     is HttpMessage -> {
-                        tcpTerminal.sendHttpMessage(received)
+                        tcpTerminal!!.sendHttpMessage(received)
                     }
 
                     is EthernetFrame -> {
-                        tcpTerminal.sendFrame(received)
+                        tcpTerminal!!.sendFrame(received)
                     }
 
                     else -> throw NotImplementedError()
@@ -181,8 +181,8 @@ internal class Controller(private val bridge: SharedBridge) {
     private fun launchJobTCPIncoming() {
         jobTCPIncoming = bridge.scope.launch(bridge.handler) {
             while (isActive) {
-                tcpTerminal.consumeIPPacketBuffer {
-                    ipTerminal.feedIncomingPacket(it)
+                tcpTerminal!!.consumeIPPacketBuffer {
+                    ipTerminal!!.feedIncomingPacket(it)
                 }
             }
         }
@@ -195,7 +195,7 @@ internal class Controller(private val bridge: SharedBridge) {
 
             while (isActive) {
                 udpTerminal!!.receivePacket().also {
-                    ipTerminal.feedIncomingPacket(it)
+                    ipTerminal!!.feedIncomingPacket(it)
                 }
             }
         }
@@ -206,14 +206,14 @@ internal class Controller(private val bridge: SharedBridge) {
             var lastUDPStatus = UDPStatus.CLOSED
 
             while (isActive) {
-                val firstPacket = ipTerminal.waitOutgoingPacket()
+                val firstPacket = ipTerminal!!.waitOutgoingPacket()
 
                 // send through UDP hole if possible
                 if (udpTerminal != null) {
                     val currentUDPStatus = bridge.udpAccelerationConfig!!.status
 
                     if (currentUDPStatus != lastUDPStatus) {
-                        networkObserver.enforceUpdateSummary()
+                        networkObserver!!.enforceUpdateSummary()
                         lastUDPStatus = currentUDPStatus
                     }
 
@@ -224,27 +224,27 @@ internal class Controller(private val bridge: SharedBridge) {
                 }
 
                 // finally TCP connection is needed
-                tcpTerminal.loadOutgoingPacket(firstPacket)
+                tcpTerminal!!.loadOutgoingPacket(firstPacket)
 
                 while (isActive) {
-                    val polled = ipTerminal.pollOutgoingPacket() ?: break
+                    val polled = ipTerminal!!.pollOutgoingPacket() ?: break
 
-                    val isAddable = tcpTerminal.addOutGoingPacket(polled)
+                    val isAddable = tcpTerminal!!.addOutGoingPacket(polled)
                     if (!isAddable) break
                 }
 
-                tcpTerminal.sendOutgoingPacket()
+                tcpTerminal!!.sendOutgoingPacket()
             }
         }
     }
 
     private suspend fun relaySoftEtherMessage() {
-        val response = tcpTerminal.receiveHttpMessage()
+        val response = tcpTerminal!!.receiveHttpMessage()
         bridge.softEtherChannel.send(response)
     }
 
     private suspend fun relayDhcpMessage() {
-        tcpTerminal.consumeFrame {
+        tcpTerminal!!.consumeFrame {
             if (it.payloadIPv4Packet?.payloadUDPDatagram?.payloadDhcpMessage != null) {
                 bridge.dhcpChannel.send(it)
             }
@@ -252,7 +252,7 @@ internal class Controller(private val bridge: SharedBridge) {
     }
 
     private suspend fun relayAprPacket() {
-        tcpTerminal.consumeFrame {
+        tcpTerminal!!.consumeFrame {
             if (it.payloadARPPacket != null) {
                 bridge.arpChannel.send(it)
             }
@@ -279,16 +279,9 @@ internal class Controller(private val bridge: SharedBridge) {
 
                     isClosing = true
 
-                    if (::tcpTerminal.isInitialized) tcpTerminal.close()
-                    udpTerminal?.close()
-                    if (::ipTerminal.isInitialized) ipTerminal.close()
-                    if (::networkObserver.isInitialized) networkObserver.close()
-
-                    if (::jobMain.isInitialized) jobMain.cancel()
-                    if (::jobControlUnit.isInitialized) jobControlUnit.cancel()
-                    if (::jobTCPIncoming.isInitialized) jobTCPIncoming.cancel()
-                    if (::jobUDPIncoming.isInitialized) jobUDPIncoming.cancel()
-                    if (::jobOutgoing.isInitialized) jobOutgoing.cancel()
+                    closeTerminals()
+                    networkObserver?.close()
+                    cancelJobs()
 
                     PreferenceManager.getDefaultSharedPreferences(bridge.service).also {
                         setBooleanPrefValue(false, MvcPreference.HOME_CONNECTOR, it)
@@ -300,12 +293,25 @@ internal class Controller(private val bridge: SharedBridge) {
                     }
 
                     logWriter?.close()
-                    if (::networkObserver.isInitialized) networkObserver.close()
 
                     bridge.service.stopForeground(true)
                     bridge.service.stopSelf()
                 }
             }
         }
+    }
+
+    private fun cancelJobs() {
+        jobMain?.cancel()
+        jobControlUnit?.cancel()
+        jobTCPIncoming?.cancel()
+        jobUDPIncoming?.cancel()
+        jobOutgoing?.cancel()
+    }
+
+    private fun closeTerminals() {
+        tcpTerminal?.close()
+        udpTerminal?.close()
+        ipTerminal?.close()
     }
 }

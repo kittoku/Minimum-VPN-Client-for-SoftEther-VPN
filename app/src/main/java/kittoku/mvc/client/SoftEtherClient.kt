@@ -8,57 +8,67 @@ import kittoku.mvc.cipher.hashSha0
 import kittoku.mvc.debug.ErrorCode
 import kittoku.mvc.debug.assertAlways
 import kittoku.mvc.debug.assertOrThrow
+import kittoku.mvc.extension.copy
 import kittoku.mvc.extension.nextBytes
-import kittoku.mvc.extension.read
 import kittoku.mvc.teminal.CHACHA20_POLY1305_KEY_SIZE
 import kittoku.mvc.teminal.UDP_CIPHER_ALGORITHM
 import kittoku.mvc.unit.HttpMessage
+import kittoku.mvc.unit.IPv4_ADDRESS_SIZE
 import kittoku.mvc.unit.property.COMPATIBLE_BUILD
 import kittoku.mvc.unit.property.COMPATIBLE_VERSION
 import kittoku.mvc.unit.property.PropertyPack
-import kittoku.mvc.unit.property.SepAuthType
-import kittoku.mvc.unit.property.SepBuild
-import kittoku.mvc.unit.property.SepClientBuild
-import kittoku.mvc.unit.property.SepClientHostname
-import kittoku.mvc.unit.property.SepClientID
-import kittoku.mvc.unit.property.SepClientIPAddress
-import kittoku.mvc.unit.property.SepClientOSName
-import kittoku.mvc.unit.property.SepClientOSVersion
-import kittoku.mvc.unit.property.SepClientPort
-import kittoku.mvc.unit.property.SepClientProductBuild
-import kittoku.mvc.unit.property.SepClientProductName
-import kittoku.mvc.unit.property.SepClientProductVersion
-import kittoku.mvc.unit.property.SepClientStr
-import kittoku.mvc.unit.property.SepClientVersion
-import kittoku.mvc.unit.property.SepHalfConnection
-import kittoku.mvc.unit.property.SepHello
-import kittoku.mvc.unit.property.SepHubName
-import kittoku.mvc.unit.property.SepMaxConnection
-import kittoku.mvc.unit.property.SepMethod
-import kittoku.mvc.unit.property.SepPenCore
-import kittoku.mvc.unit.property.SepProtocol
-import kittoku.mvc.unit.property.SepProxyIPAddress
-import kittoku.mvc.unit.property.SepProxyPort
-import kittoku.mvc.unit.property.SepSecurePassword
-import kittoku.mvc.unit.property.SepServerHostname
-import kittoku.mvc.unit.property.SepServerIPAddress
-import kittoku.mvc.unit.property.SepServerPort2
-import kittoku.mvc.unit.property.SepServerProductBuild
-import kittoku.mvc.unit.property.SepServerProductName
-import kittoku.mvc.unit.property.SepServerProductVersion
-import kittoku.mvc.unit.property.SepUDPClientIP
-import kittoku.mvc.unit.property.SepUDPClientKeyV2
-import kittoku.mvc.unit.property.SepUDPClientPort
-import kittoku.mvc.unit.property.SepUDPMaxVersion
-import kittoku.mvc.unit.property.SepUDPSupportFastDisconnectDetect
-import kittoku.mvc.unit.property.SepUDPVersion
-import kittoku.mvc.unit.property.SepUniqueIDCamel
-import kittoku.mvc.unit.property.SepUniqueIDSnake
-import kittoku.mvc.unit.property.SepUseCompress
-import kittoku.mvc.unit.property.SepUseEncrypt
-import kittoku.mvc.unit.property.SepUseUDPAcceleration
-import kittoku.mvc.unit.property.SepUsername
-import kittoku.mvc.unit.property.SepVersion
+import kittoku.mvc.unit.property.SEP_AUTH_TYPE
+import kittoku.mvc.unit.property.SEP_BUILD
+import kittoku.mvc.unit.property.SEP_CLIENT_BUILD
+import kittoku.mvc.unit.property.SEP_CLIENT_HOSTNAME
+import kittoku.mvc.unit.property.SEP_CLIENT_ID
+import kittoku.mvc.unit.property.SEP_CLIENT_IP_ADDRESS
+import kittoku.mvc.unit.property.SEP_CLIENT_OS_NAME
+import kittoku.mvc.unit.property.SEP_CLIENT_OS_VER
+import kittoku.mvc.unit.property.SEP_CLIENT_PORT
+import kittoku.mvc.unit.property.SEP_CLIENT_PRODUCT_BUILD
+import kittoku.mvc.unit.property.SEP_CLIENT_PRODUCT_NAME
+import kittoku.mvc.unit.property.SEP_CLIENT_PRODUCT_VER
+import kittoku.mvc.unit.property.SEP_CLIENT_STR
+import kittoku.mvc.unit.property.SEP_CLIENT_VER
+import kittoku.mvc.unit.property.SEP_ERROR
+import kittoku.mvc.unit.property.SEP_HALF_CONNECTION
+import kittoku.mvc.unit.property.SEP_HELLO
+import kittoku.mvc.unit.property.SEP_HUB_NAME
+import kittoku.mvc.unit.property.SEP_MAX_CONNECTION
+import kittoku.mvc.unit.property.SEP_METHOD
+import kittoku.mvc.unit.property.SEP_PEN_CORE
+import kittoku.mvc.unit.property.SEP_PROTOCOL
+import kittoku.mvc.unit.property.SEP_PROXY_IP_ADDRESS
+import kittoku.mvc.unit.property.SEP_PROXY_PORT
+import kittoku.mvc.unit.property.SEP_RANDOM
+import kittoku.mvc.unit.property.SEP_SECURE_PASSWORD
+import kittoku.mvc.unit.property.SEP_SERVER_HOSTNAME
+import kittoku.mvc.unit.property.SEP_SERVER_IP_ADDRESS
+import kittoku.mvc.unit.property.SEP_SERVER_PORT2
+import kittoku.mvc.unit.property.SEP_SERVER_PRODUCT_BUILD
+import kittoku.mvc.unit.property.SEP_SERVER_PRODUCT_NAME
+import kittoku.mvc.unit.property.SEP_SERVER_PRODUCT_VER
+import kittoku.mvc.unit.property.SEP_UDP_CLIENT_COOKIE
+import kittoku.mvc.unit.property.SEP_UDP_CLIENT_IP
+import kittoku.mvc.unit.property.SEP_UDP_CLIENT_KEY_V2
+import kittoku.mvc.unit.property.SEP_UDP_CLIENT_PORT
+import kittoku.mvc.unit.property.SEP_UDP_ENABLE_FAST_DISCONNECT_DETECT
+import kittoku.mvc.unit.property.SEP_UDP_MAX_VERSION
+import kittoku.mvc.unit.property.SEP_UDP_SERVER_COOKIE
+import kittoku.mvc.unit.property.SEP_UDP_SERVER_IP
+import kittoku.mvc.unit.property.SEP_UDP_SERVER_KEY_V2
+import kittoku.mvc.unit.property.SEP_UDP_SERVER_PORT
+import kittoku.mvc.unit.property.SEP_UDP_SUPPORT_FAST_DISCONNECT_DETECT
+import kittoku.mvc.unit.property.SEP_UDP_USE_ENCRYPTION
+import kittoku.mvc.unit.property.SEP_UDP_VERSION
+import kittoku.mvc.unit.property.SEP_UNIQUE_ID_CAMEL
+import kittoku.mvc.unit.property.SEP_UNIQUE_ID_SNAKE
+import kittoku.mvc.unit.property.SEP_USERNAME
+import kittoku.mvc.unit.property.SEP_USE_COMPRESS
+import kittoku.mvc.unit.property.SEP_USE_ENCRYPT
+import kittoku.mvc.unit.property.SEP_USE_UDP_ACCELERATION
+import kittoku.mvc.unit.property.SEP_VERSION
 import kotlinx.coroutines.launch
 import java.net.Inet4Address
 import java.nio.ByteBuffer
@@ -145,8 +155,8 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
 
         assertOrThrow(ErrorCode.SOFTETHER_INVALID_PROTOCOL_SERVER) {
             assertAlways(response.header == HTTP_200_HEADER)
-            assertAlways(receivedPack.sepError == null)
-            assertAlways(receivedPack.sepRandom != null)
+            assertAlways(receivedPack.intProperties[SEP_ERROR] == null)
+            assertAlways(receivedPack.bytesProperties[SEP_RANDOM] != null)
         }
     }
 
@@ -156,79 +166,67 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
 
         val hashedPassword = hashSha0(password + uppercaseUsername)
 
-        return hashSha0(hashedPassword + receivedPack.sepRandom!!.value)
+        return hashSha0(hashedPassword + receivedPack.bytesProperties[SEP_RANDOM]!!)
     }
 
-    private fun prepareProperties(): ByteArray {
-        val properties = PropertyPack()
+    private fun preparePropertyPack(): ByteArray {
+        val pack = PropertyPack()
         val appName = bridge.service.getText(R.string.app_name).toString()
 
-        properties.sepBuild = SepBuild().also { it.value = COMPATIBLE_BUILD }
-        properties.sepVersion = SepVersion().also { it.value = COMPATIBLE_VERSION }
-        properties.sepUniqueIDCamel = SepUniqueIDCamel().also { it.value = bridge.random.nextBytes(16) }
-        properties.sepUniqueIDSnake = SepUniqueIDSnake().also { it.value = bridge.random.nextBytes(20) } // pseudo implementation
-        properties.sepClientBuild = SepClientBuild().also { it.value = COMPATIBLE_BUILD }
-        properties.sepClientID = SepClientID().also { it.value = 0 }
-        properties.sepClientStr = SepClientStr().also { it.value = appName }
-        properties.sepClientVersion = SepClientVersion().also { it.value = COMPATIBLE_VERSION }
-        properties.sepClientHostname = SepClientHostname().also { it.value = bridge.socket.localAddress.hostName }
-        properties.sepClientIPAddress = SepClientIPAddress().also { bridge.socket.localAddress.address.copyInto(it.value) }
-        properties.sepClientOSName = SepClientOSName().also { it.value = "Android" }
-        properties.sepClientOSVersion = SepClientOSVersion().also { it.value = Build.VERSION.RELEASE }
-        properties.sepClientPort = SepClientPort().also { it.value = bridge.socket.localPort }
-        properties.sepClientProductBuild = SepClientProductBuild().also { it.value =
-            COMPATIBLE_BUILD
-        }
-        properties.sepClientProductName = SepClientProductName().also { it.value = appName }
-        properties.sepClientProductVersion = SepClientProductVersion().also { it.value =
-            COMPATIBLE_VERSION
-        }
-        properties.sepHello = SepHello().also { it.value = appName }
+        pack.intProperties[SEP_BUILD] = COMPATIBLE_BUILD
+        pack.intProperties[SEP_VERSION] = COMPATIBLE_VERSION
+        pack.bytesProperties[SEP_UNIQUE_ID_CAMEL] = bridge.random.nextBytes(16)
+        pack.bytesProperties[SEP_UNIQUE_ID_SNAKE] = bridge.random.nextBytes(20) // pseudo implementation
+        pack.intProperties[SEP_CLIENT_BUILD] = COMPATIBLE_BUILD
+        pack.intProperties[SEP_CLIENT_ID] = 0
+        pack.asciiProperties[SEP_CLIENT_STR] = appName
+        pack.intProperties[SEP_CLIENT_VER] = COMPATIBLE_VERSION
+        pack.asciiProperties[SEP_CLIENT_HOSTNAME] = bridge.socket.localAddress.hostName
+        pack.addressProperties[SEP_CLIENT_IP_ADDRESS] = bridge.socket.localAddress.address.copy()
+        pack.asciiProperties[SEP_CLIENT_OS_NAME] = "Android"
+        pack.asciiProperties[SEP_CLIENT_OS_VER] = Build.VERSION.RELEASE
+        pack.intProperties[SEP_CLIENT_PORT] = bridge.socket.localPort
+        pack.intProperties[SEP_CLIENT_PRODUCT_BUILD] = COMPATIBLE_BUILD
+        pack.asciiProperties[SEP_CLIENT_PRODUCT_NAME] = appName
+        pack.intProperties[SEP_CLIENT_PRODUCT_VER] = COMPATIBLE_VERSION
+        pack.asciiProperties[SEP_HELLO] = appName
 
-        properties.sepProxyPort = SepProxyPort()
-        properties.sepProxyIPAddress = SepProxyIPAddress()
+        pack.intProperties[SEP_PROXY_PORT] = 0
+        pack.addressProperties[SEP_PROXY_IP_ADDRESS] = ByteArray(IPv4_ADDRESS_SIZE)
 
-        properties.sepServerHostname = SepServerHostname().also { it.value = bridge.socket.inetAddress.hostName }
-        properties.sepServerIPAddress = SepServerIPAddress().also { bridge.socket.inetAddress.address.copyInto(it.value) }
-        properties.sepServerPort = SepServerPort2().also { it.value = bridge.socket.port }
-        properties.sepServerProductBuild = SepServerProductBuild().also { it.value = receivedPack.sepBuild?.value ?: 0 }
-        properties.sepServerProductName = SepServerProductName().also { it.value = receivedPack.sepHello?.value ?: "" }
-        properties.sepServerProductVersion = SepServerProductVersion().also { it.value = receivedPack.sepVersion?.value ?: 0 }
+        pack.asciiProperties[SEP_SERVER_HOSTNAME] = bridge.socket.inetAddress.hostName
+        pack.addressProperties[SEP_SERVER_IP_ADDRESS] = bridge.socket.inetAddress.address.copy()
+        pack.intProperties[SEP_SERVER_PORT2] = bridge.socket.port
+        pack.intProperties[SEP_SERVER_PRODUCT_BUILD] = receivedPack.intProperties[SEP_BUILD] ?: 0
+        pack.asciiProperties[SEP_SERVER_PRODUCT_NAME] = receivedPack.asciiProperties[SEP_HELLO] ?: ""
+        pack.intProperties[SEP_SERVER_PRODUCT_VER] = receivedPack.intProperties[SEP_VERSION] ?: 0
 
-        properties.sepMethod = SepMethod().also { it.value = "login" }
-        properties.sepAuthType = SepAuthType().also { it.value = 1 }
-        properties.sepUsername = SepUsername().also { it.value = bridge.clientUsername }
-        properties.sepProtocol = SepProtocol().also { it.value = 0 }
-        properties.sepHubName = SepHubName().also { it.value = bridge.serverHubName }
-        properties.sepUseEncrypt = SepUseEncrypt().also { it.value = 1 }
-        properties.sepUseCompress = SepUseCompress().also { it.value = 0 }
-        properties.sepMaxConnection = SepMaxConnection().also { it.value = 1 }
-        properties.sepHalfConnection = SepHalfConnection().also { it.value = 0 }
-        properties.sepSecurePassword = SepSecurePassword().also { it.value.read(calcSecurePassword()) }
-        properties.sepPenCore = SepPenCore().also {
-            val randomSize = bridge.random.nextInt(1000)
-            it.value = bridge.random.nextBytes(randomSize)
-        }
+        pack.asciiProperties[SEP_METHOD] = "login"
+        pack.intProperties[SEP_AUTH_TYPE] = 1
+        pack.asciiProperties[SEP_USERNAME] = bridge.clientUsername
+        pack.intProperties[SEP_PROTOCOL] = 0
+        pack.asciiProperties[SEP_HUB_NAME] = bridge.serverHubName
+        pack.booleanProperties[SEP_USE_ENCRYPT] = true
+        pack.booleanProperties[SEP_USE_COMPRESS] = false
+        pack.intProperties[SEP_MAX_CONNECTION] = 1
+        pack.intProperties[SEP_HALF_CONNECTION] = 0
+        pack.bytesProperties[SEP_SECURE_PASSWORD] = calcSecurePassword()
+        pack.bytesProperties[SEP_PEN_CORE] = bridge.random.nextBytes(bridge.random.nextInt(1000))
 
         bridge.udpAccelerationConfig?.also { config ->
-            properties.sepUseUDPAcceleration = SepUseUDPAcceleration().also { it.value = true }
-            properties.sepUDPVersion = SepUDPVersion().also { it.value = 2 }
-            properties.sepUDPMaxVersion = SepUDPMaxVersion().also { it.value = 2 }
-            properties.sepUDPClientIP = SepUDPClientIP().also { it.value.read(config.clientReportedAddress.address) }
-            properties.sepUDPClientPort = SepUDPClientPort().also { it.value = config.clientReportedPort }
-            properties.sepUDPSupportFastDisconnectDetect = SepUDPSupportFastDisconnectDetect().also { it.value = true }
-            properties.sepUDPClientKeyV2 = SepUDPClientKeyV2().also {
-                val key = bridge.random.nextBytes(UDP_ACCELERATION_V2_KEY_SIZE)
-                it.value = key
-
-                val array = ByteArray(CHACHA20_POLY1305_KEY_SIZE)
-                array.read(key)
-                config.clientKey = SecretKeySpec(array, UDP_CIPHER_ALGORITHM)
+            pack.booleanProperties[SEP_USE_UDP_ACCELERATION] = true
+            pack.intProperties[SEP_UDP_VERSION] = 2
+            pack.intProperties[SEP_UDP_MAX_VERSION] = 2
+            pack.addressProperties[SEP_UDP_CLIENT_IP] = config.clientReportedAddress.address.copy()
+            pack.intProperties[SEP_UDP_CLIENT_PORT] = config.clientReportedPort
+            pack.booleanProperties[SEP_UDP_SUPPORT_FAST_DISCONNECT_DETECT] = true
+            pack.bytesProperties[SEP_UDP_CLIENT_KEY_V2] = bridge.random.nextBytes(UDP_ACCELERATION_V2_KEY_SIZE).also {
+                config.clientKey = SecretKeySpec(it.copyOf(CHACHA20_POLY1305_KEY_SIZE), UDP_CIPHER_ALGORITHM)
             }
         }
 
-        val buffer = ByteBuffer.allocate(properties.length)
-        properties.write(buffer)
+        val buffer = ByteBuffer.allocate(pack.length)
+        pack.write(buffer)
 
         return buffer.array()
     }
@@ -236,7 +234,7 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
     private suspend fun uploadProperties() {
         val request = HttpMessage().also {
             it.header = "POST /vpnsvc/vpn.cgi HTTP/1.1"
-            it.body = prepareProperties()
+            it.body = preparePropertyPack()
             it.fieldMap["Host"] = bridge.serverHostname
             it.fieldMap["Content-Type"] = "application/octet-stream"
             it.fieldMap["Content-Length"] = it.body!!.size.toString()
@@ -256,37 +254,34 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
 
         assertOrThrow(ErrorCode.SOFTETHER_AUTHENTICATION_FAILED) {
             assertAlways(response.header == HTTP_200_HEADER)
-            assertAlways(pack.sepError == null)
+            assertAlways(pack.intProperties[SEP_ERROR] == null)
         }
 
         bridge.udpAccelerationConfig?.also { config ->
             assertOrThrow(ErrorCode.UDP_INVALID_CONFIGURATION_ASSIGNED) {
                 // notify disabled denied
-                assertAlways(pack.sepUDPVersion?.value == 2)
-                assertAlways(pack.sepUDPUseEncryption?.value == true)
-                assertAlways(pack.sepUDPEnableFastDisconnectDetect?.value == true)
+                assertAlways(pack.intProperties[SEP_UDP_VERSION] == 2)
+                assertAlways(pack.booleanProperties[SEP_UDP_USE_ENCRYPTION] == true)
+                assertAlways(pack.booleanProperties[SEP_UDP_ENABLE_FAST_DISCONNECT_DETECT] == true)
 
-                pack.sepUDPClientCookie?.also {
-                    config.clientCookie = it.value
+                pack.intProperties[SEP_UDP_CLIENT_COOKIE]?.also {
+                    config.clientCookie = it
                 } ?: throw AssertionError()
 
-                pack.sepUDPServerIP?.also {
-                    config.serverReportedAddress =
-                        Inet4Address.getByAddress(it.value) as Inet4Address
+                pack.addressProperties[SEP_UDP_SERVER_IP]?.also {
+                    config.serverReportedAddress = Inet4Address.getByAddress(it) as Inet4Address
                 } ?: throw AssertionError()
 
-                pack.sepUDPServerPort?.also {
-                    config.serverReportedPort = it.value
+                pack.intProperties[SEP_UDP_SERVER_PORT]?.also {
+                    config.serverReportedPort = it
                 } ?: throw AssertionError()
 
-                pack.sepUDPServerCookie?.also {
-                    config.serverCookie = it.value
+                pack.intProperties[SEP_UDP_SERVER_COOKIE]?.also {
+                    config.serverCookie = it
                 } ?: throw AssertionError()
 
-                pack.sepUDPServerKeyV2?.value?.also {
-                    val array = ByteArray(CHACHA20_POLY1305_KEY_SIZE)
-                    array.read(it)
-                    config.serverKey = SecretKeySpec(array, UDP_CIPHER_ALGORITHM)
+                pack.bytesProperties[SEP_UDP_SERVER_KEY_V2]?.also {
+                    config.serverKey = SecretKeySpec(it.copyOf(CHACHA20_POLY1305_KEY_SIZE), UDP_CIPHER_ALGORITHM)
                 } ?: throw AssertionError()
 
             }
