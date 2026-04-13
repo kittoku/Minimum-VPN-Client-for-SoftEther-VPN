@@ -42,12 +42,6 @@ internal fun ByteArray.search(pattern: ByteArray): Int {
     return -1
 }
 
-internal fun ByteArray.copy(): ByteArray {
-    return ByteArray(this.size).also {
-        it.read(this)
-    }
-}
-
 internal fun ByteArray.read(other: ByteArray) {
     val wrapped = ByteBuffer.wrap(other)
     wrapped.get(this)

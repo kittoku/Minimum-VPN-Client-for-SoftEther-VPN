@@ -8,7 +8,6 @@ import kittoku.mvc.cipher.hashSha0
 import kittoku.mvc.debug.ErrorCode
 import kittoku.mvc.debug.assertAlways
 import kittoku.mvc.debug.assertOrThrow
-import kittoku.mvc.extension.copy
 import kittoku.mvc.extension.nextBytes
 import kittoku.mvc.teminal.CHACHA20_POLY1305_KEY_SIZE
 import kittoku.mvc.teminal.UDP_CIPHER_ALGORITHM
@@ -182,7 +181,7 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
         pack.asciiProperties[SEP_CLIENT_STR] = appName
         pack.intProperties[SEP_CLIENT_VER] = COMPATIBLE_VERSION
         pack.asciiProperties[SEP_CLIENT_HOSTNAME] = bridge.socket.localAddress.hostName
-        pack.addressProperties[SEP_CLIENT_IP_ADDRESS] = bridge.socket.localAddress.address.copy()
+        pack.addressProperties[SEP_CLIENT_IP_ADDRESS] = bridge.socket.localAddress.address.copyOf()
         pack.asciiProperties[SEP_CLIENT_OS_NAME] = "Android"
         pack.asciiProperties[SEP_CLIENT_OS_VER] = Build.VERSION.RELEASE
         pack.intProperties[SEP_CLIENT_PORT] = bridge.socket.localPort
@@ -195,7 +194,7 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
         pack.addressProperties[SEP_PROXY_IP_ADDRESS] = ByteArray(IPv4_ADDRESS_SIZE)
 
         pack.asciiProperties[SEP_SERVER_HOSTNAME] = bridge.socket.inetAddress.hostName
-        pack.addressProperties[SEP_SERVER_IP_ADDRESS] = bridge.socket.inetAddress.address.copy()
+        pack.addressProperties[SEP_SERVER_IP_ADDRESS] = bridge.socket.inetAddress.address.copyOf()
         pack.intProperties[SEP_SERVER_PORT2] = bridge.socket.port
         pack.intProperties[SEP_SERVER_PRODUCT_BUILD] = receivedPack.intProperties[SEP_BUILD] ?: 0
         pack.asciiProperties[SEP_SERVER_PRODUCT_NAME] = receivedPack.asciiProperties[SEP_HELLO] ?: ""
@@ -217,7 +216,7 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
             pack.booleanProperties[SEP_USE_UDP_ACCELERATION] = true
             pack.intProperties[SEP_UDP_VERSION] = 2
             pack.intProperties[SEP_UDP_MAX_VERSION] = 2
-            pack.addressProperties[SEP_UDP_CLIENT_IP] = config.clientReportedAddress.address.copy()
+            pack.addressProperties[SEP_UDP_CLIENT_IP] = config.clientReportedAddress.address.copyOf()
             pack.intProperties[SEP_UDP_CLIENT_PORT] = config.clientReportedPort
             pack.booleanProperties[SEP_UDP_SUPPORT_FAST_DISCONNECT_DETECT] = true
             pack.bytesProperties[SEP_UDP_CLIENT_KEY_V2] = bridge.random.nextBytes(UDP_ACCELERATION_V2_KEY_SIZE).also {

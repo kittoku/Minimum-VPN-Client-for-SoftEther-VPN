@@ -4,7 +4,6 @@ import kittoku.mvc.ControlMessage
 import kittoku.mvc.SharedBridge
 import kittoku.mvc.debug.ErrorCode
 import kittoku.mvc.debug.MvcException
-import kittoku.mvc.extension.copy
 import kittoku.mvc.extension.isSame
 import kittoku.mvc.extension.read
 import kittoku.mvc.unit.ETHERNET_BROADCAST_ADDRESS
@@ -164,8 +163,8 @@ internal class DhcpClient(private val bridge: SharedBridge) {
         return withTimeoutOrNull(timeout) {
             val options = OptionPack().also {
                 it.byteOptions[DHCP_OPTION_MESSAGE_TYPE] = DHCP_MESSAGE_TYPE_REQUEST
-                it.addressOptions[DHCP_OPTION_REQUESTED_ADDRESS] = offer.yourIpAddress.copy()
-                it.addressOptions[DHCP_OPTION_DHCP_SERVER_ADDRESS] = offer.options.addressOptions[DHCP_OPTION_DHCP_SERVER_ADDRESS]!!.copy()
+                it.addressOptions[DHCP_OPTION_REQUESTED_ADDRESS] = offer.yourIpAddress.copyOf()
+                it.addressOptions[DHCP_OPTION_DHCP_SERVER_ADDRESS] = offer.options.addressOptions[DHCP_OPTION_DHCP_SERVER_ADDRESS]!!.copyOf()
                 it.variableOptions[DHCP_OPTION_PARAMETER_LIST] = generateBasicOptionsParameters()
             }
 
