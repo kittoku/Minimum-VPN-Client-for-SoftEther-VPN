@@ -12,6 +12,7 @@ import kittoku.mvc.unit.ETHER_TYPE_IPv4
 import kittoku.mvc.unit.EthernetFrame
 import kittoku.mvc.unit.IP_PROTOCOL_UDP
 import kittoku.mvc.unit.IPv4Packet
+import kittoku.mvc.unit.IPv4_ADDRESS_SIZE
 import kittoku.mvc.unit.IPv4_BROADCAST_ADDRESS
 import kittoku.mvc.unit.IPv4_UNKNOWN_ADDRESS
 import kittoku.mvc.unit.UDPDatagram
@@ -58,7 +59,7 @@ internal class DhcpClient(private val bridge: SharedBridge) {
         }
     }
 
-    private fun prepareBasicOptionsParameters(): ByteArray {
+    private fun generateBasicOptionsParameters(): ByteArray {
         val parameters = listOf(
             DHCP_OPTION_SUBNET_MASK,
             DHCP_OPTION_ROUTER_ADDRESS,
@@ -75,14 +76,7 @@ internal class DhcpClient(private val bridge: SharedBridge) {
             return null
         }
 
-        val packet = frame.payloadIPv4Packet!!
-        val isBroadcastPacket = packet.dstAddress.isSame(IPv4_BROADCAST_ADDRESS)
-        val isToMePacket = packet.dstAddress.isSame(bridge.assignedIpAddress)
-        if (!(isBroadcastPacket || isToMePacket)) {
-            return null
-        }
-
-        val datagram = packet.payloadUDPDatagram!!
+        val datagram = frame.payloadIPv4Packet!!.payloadUDPDatagram!!
         if (datagram.dstPort != UDP_PORT_DHCP_CLIENT || datagram.srcPort != UDP_PORT_DHCP_SEVER) {
             return null
         }
@@ -151,7 +145,7 @@ internal class DhcpClient(private val bridge: SharedBridge) {
 
              val options = OptionPack().also {
                  it.byteOptions[DHCP_OPTION_MESSAGE_TYPE] = DHCP_MESSAGE_TYPE_DISCOVER
-                 it.variableOptions[DHCP_OPTION_PARAMETER_LIST] = prepareBasicOptionsParameters()
+                 it.variableOptions[DHCP_OPTION_PARAMETER_LIST] = generateBasicOptionsParameters()
              }
 
              val message = DhcpMessage().also {
@@ -172,7 +166,7 @@ internal class DhcpClient(private val bridge: SharedBridge) {
                 it.byteOptions[DHCP_OPTION_MESSAGE_TYPE] = DHCP_MESSAGE_TYPE_REQUEST
                 it.addressOptions[DHCP_OPTION_REQUESTED_ADDRESS] = offer.yourIpAddress.copy()
                 it.addressOptions[DHCP_OPTION_DHCP_SERVER_ADDRESS] = offer.options.addressOptions[DHCP_OPTION_DHCP_SERVER_ADDRESS]!!.copy()
-                it.variableOptions[DHCP_OPTION_PARAMETER_LIST] = prepareBasicOptionsParameters()
+                it.variableOptions[DHCP_OPTION_PARAMETER_LIST] = generateBasicOptionsParameters()
             }
 
             val message = DhcpMessage().also {
@@ -195,7 +189,8 @@ internal class DhcpClient(private val bridge: SharedBridge) {
         if (subnetMask.isSame(IPv4_UNKNOWN_ADDRESS)) return false
         bridge.subnetMask.read(subnetMask)
 
-        val defaultGatewayAddress = ack.options.addressOptions[DHCP_OPTION_ROUTER_ADDRESS] ?: return false
+        val givenDefaultGatewayAddresses = ack.options.variableOptions[DHCP_OPTION_ROUTER_ADDRESS] ?: return false
+        val defaultGatewayAddress = givenDefaultGatewayAddresses.sliceArray(0 until IPv4_ADDRESS_SIZE) // use only the first address
         if (defaultGatewayAddress.isSame(IPv4_UNKNOWN_ADDRESS)) return false
         bridge.defaultGatewayIpAddress.read(defaultGatewayAddress)
 
@@ -203,9 +198,9 @@ internal class DhcpClient(private val bridge: SharedBridge) {
         if (dhcpServerAddress.isSame(IPv4_UNKNOWN_ADDRESS)) return false
         bridge.dhcpServerIpAddress.read(dhcpServerAddress)
 
-        ack.options.addressOptions[DHCP_OPTION_DNS_SERVER_ADDRESS]?.also {
+        ack.options.variableOptions[DHCP_OPTION_DNS_SERVER_ADDRESS]?.also {
             if (it.isSame(IPv4_UNKNOWN_ADDRESS)) return false
-            bridge.dnsServerIpAddress = it.copy()
+            bridge.dnsServerIpAddress = it.sliceArray(0 until IPv4_ADDRESS_SIZE) // use only the first address
         }
 
         ack.options.intOptions[DHCP_OPTION_LEASE_TIME]?.also {

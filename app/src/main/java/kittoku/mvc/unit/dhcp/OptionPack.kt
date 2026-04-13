@@ -1,6 +1,7 @@
 package kittoku.mvc.unit.dhcp
 
 import kittoku.mvc.debug.assertAlways
+import kittoku.mvc.extension.move
 import kittoku.mvc.extension.toIntAsUByte
 import kittoku.mvc.unit.DataUnit
 import kittoku.mvc.unit.IPv4_ADDRESS_SIZE
@@ -99,8 +100,7 @@ internal class OptionPack : DataUnit {
     }
 
     private fun discardOption(buffer: ByteBuffer) {
-        DhcpOption().also {
-            it.read(buffer)
-        }
+        val size = buffer.get().toIntAsUByte()
+        buffer.move(size)
     }
 }
