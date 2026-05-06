@@ -7,10 +7,6 @@ import kittoku.mvc.extension.toInetAddress
 import kittoku.mvc.unit.ETHERNET_HEADER_SIZE
 import kittoku.mvc.unit.ETHER_TYPE_IPv4
 import kittoku.mvc.unit.IPv4_VERSION_AND_HEADER_LENGTH
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.yield
@@ -22,12 +18,9 @@ import java.nio.ByteBuffer
 
 
 internal class IPTerminal(private val bridge: SharedBridge) {
-    private lateinit var fd: ParcelFileDescriptor
-    private lateinit var inputStream: InputStream
-    private lateinit var outputStream: OutputStream
-
-    private lateinit var jobRetrieve: Job
-    private val retrieveChannel = Channel<ByteBuffer>(0)
+    private var fd: ParcelFileDescriptor? = null
+    private var inputStream: InputStream? = null
+    private var outputStream: OutputStream? = null
 
     private val mutex = Mutex()
 
@@ -49,32 +42,12 @@ internal class IPTerminal(private val bridge: SharedBridge) {
         builder.setBlocking(true)
         builder.setMtu(bridge.internalEthernetMTU)
 
-        fd = builder.establish()!!
-        inputStream = FileInputStream(fd.fileDescriptor)
-        outputStream = FileOutputStream(fd.fileDescriptor)
+        fd = builder.establish()
+        inputStream = FileInputStream(fd!!.fileDescriptor)
+        outputStream = FileOutputStream(fd!!.fileDescriptor)
     }
-
-    internal fun launchJobRetrieve() {
-        jobRetrieve = bridge.scope.launch(bridge.handler) {
-            val bufferSize = bridge.internalEthernetMTU + ETHERNET_HEADER_SIZE
-            val alpha = ByteBuffer.allocate(bufferSize)
-            val beta = ByteBuffer.allocate(bufferSize)
-
-            var isAlphaGo = true
-
-            while (isActive) {
-                if (isAlphaGo) {
-                    retrievePacket(alpha)
-                    isAlphaGo = false
-                } else {
-                    retrievePacket(beta)
-                    isAlphaGo = true
-                }
-            }
-        }
-    }
-
-    private suspend fun retrievePacket(buffer: ByteBuffer) {
+    
+    internal suspend fun retrievePacket(buffer: ByteBuffer) {
         while (true) {
             yield()
 
@@ -82,30 +55,21 @@ internal class IPTerminal(private val bridge: SharedBridge) {
             buffer.put(bridge.defaultGatewayMacAddress)
             buffer.put(bridge.clientMacAddress)
             buffer.putShort(ETHER_TYPE_IPv4)
-            val readLength = inputStream.read(buffer.array(), buffer.position(), bridge.internalEthernetMTU)
+            val readLength = inputStream!!.read(buffer.array(), buffer.position(), bridge.internalEthernetMTU)
             buffer.move(readLength)
             buffer.flip()
 
             if (buffer.get(ETHERNET_HEADER_SIZE) == IPv4_VERSION_AND_HEADER_LENGTH) break // send only IPv4 packet
         }
-
-        retrieveChannel.send(buffer)
     }
 
-    internal suspend fun waitOutgoingPacket() = retrieveChannel.receive()
-
-    internal fun pollOutgoingPacket() = retrieveChannel.tryReceive().getOrNull()
-
-    internal suspend fun feedIncomingPacket(buffer: ByteBuffer) {
+    internal suspend fun writePacket(start: Int, size: Int, src: ByteArray) { // packets are discarded until VPN has been established
         mutex.withLock {
-            outputStream.write(buffer.array(), buffer.position(), buffer.remaining())
-            outputStream.flush()
-
-            buffer.position(buffer.limit())
+            outputStream?.write(src, start, size)
         }
     }
 
     internal fun close() {
-        if (::fd.isInitialized) fd.close()
+        fd?.close()
     }
 }

@@ -48,7 +48,13 @@ internal class EthernetFrame : DataUnit {
     }
 
     override fun read(buffer: ByteBuffer) {
-        val payloadLength = buffer.int - ETHERNET_HEADER_SIZE
+        readWithGivenSize(buffer.int, buffer)
+    }
+
+    internal fun readWithGivenSize(frameSize: Int, buffer: ByteBuffer) {
+        val frameStop = buffer.position() + frameSize
+
+        val payloadLength = frameSize - ETHERNET_HEADER_SIZE
         assertAlways(payloadLength > 0)
 
         buffer.get(dstMac)
@@ -76,5 +82,7 @@ internal class EthernetFrame : DataUnit {
                 else -> payloadUnknown = ByteArray(payloadLength).also { buffer.get(it) }
             }
         }
+
+        buffer.position(frameStop) // make sure that padding is discarded
     }
 }

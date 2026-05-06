@@ -3,11 +3,11 @@ package kittoku.mvc.client
 import android.os.Build
 import kittoku.mvc.ControlMessage
 import kittoku.mvc.R
+import kittoku.mvc.Result
 import kittoku.mvc.SharedBridge
+import kittoku.mvc.Where
 import kittoku.mvc.cipher.hashSha0
-import kittoku.mvc.debug.ErrorCode
 import kittoku.mvc.debug.assertAlways
-import kittoku.mvc.debug.assertOrThrow
 import kittoku.mvc.extension.nextBytes
 import kittoku.mvc.teminal.CHACHA20_POLY1305_KEY_SIZE
 import kittoku.mvc.teminal.UDP_CIPHER_ALGORITHM
@@ -68,6 +68,8 @@ import kittoku.mvc.unit.property.SEP_USE_COMPRESS
 import kittoku.mvc.unit.property.SEP_USE_ENCRYPT
 import kittoku.mvc.unit.property.SEP_USE_UDP_ACCELERATION
 import kittoku.mvc.unit.property.SEP_VERSION
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import java.net.Inet4Address
 import java.nio.ByteBuffer
@@ -89,38 +91,40 @@ private const val UDP_ACCELERATION_V2_KEY_SIZE = 128
 internal const val SOFTETHER_NEGOTIATION_TIMEOUT: Long = 30_000
 
 internal class SoftEtherClient(private val bridge: SharedBridge) {
-    private lateinit var receivedPack: PropertyPack
+    internal val mailbox = Channel<HttpMessage>(Channel.BUFFERED)
+    private var jobNegotiation: Job? = null
+    private var receivedPack: PropertyPack? = null
 
     internal fun launchJobNegotiation() {
-        bridge.scope.launch(bridge.handler) {
+        jobNegotiation = bridge.scope.launch(bridge.handler) {
             uploadWatermark()
             uploadProperties()
 
-            bridge.controlMailbox.send(ControlMessage.SOFTETHER_NEGOTIATION_FINISHED)
+            bridge.httpRequestChannel.send(false)
+            bridge.controlMailbox.send(ControlMessage(Where.SOFTETHER, Result.PROCEEDED))
         }
     }
 
     private suspend fun checkSoftEtherServer() { // reserved for future use
         val request = HttpMessage().also {
-            it.header = "GET / HTTP/1.1"
-            it.fieldMap["X-VPN"] = "1"
-            it.fieldMap["Host"] = bridge.serverHostname
-            it.fieldMap["Keep-Alive"] = HTTP_KEEP_ALIVE
-            it.fieldMap["Connection"] = "Keep-Alive"
-            it.fieldMap["Accept-Language"] = "ja"
-            it.fieldMap["User-Agent"] = DEFAULT_USER_AGENT
-            it.fieldMap["Pragma"] = "no-cache"
-            it.fieldMap["Cache-Control"] = "no-cache"
+            it.startLine = "GET / HTTP/1.1"
+            it.fields["X-VPN"] = "1"
+            it.fields["Host"] = bridge.serverHostname
+            it.fields["Keep-Alive"] = HTTP_KEEP_ALIVE
+            it.fields["Connection"] = "Keep-Alive"
+            it.fields["Accept-Language"] = "ja"
+            it.fields["User-Agent"] = DEFAULT_USER_AGENT
+            it.fields["Pragma"] = "no-cache"
+            it.fields["Cache-Control"] = "no-cache"
         }
 
-        bridge.controlChannel.send(request)
-        val response = bridge.softEtherChannel.receive()
+        bridge.tcpTerminal!!.sendHttpMessage(request)
+        bridge.httpRequestChannel.send(true)
+        val response = mailbox.receive()
 
         val bodyText = response.body?.toString(Charsets.US_ASCII) ?: ""
 
-        assertOrThrow(ErrorCode.SOFTETHER_INVALID_PROTOCOL_SERVER) {
-            assertAlways(bodyText.contains(HTTP_DETECT_TAG) || bodyText.startsWith(HTTP_DETECT_BODY))
-        }
+        assertAlways(bodyText.contains(HTTP_DETECT_TAG) || bodyText.startsWith(HTTP_DETECT_BODY))
     }
 
     private suspend fun uploadWatermark() {
@@ -128,11 +132,11 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
         val bodySize = WATERMARK.size + randomSize
 
         val request = HttpMessage().also {
-            it.header = "POST /vpnsvc/connect.cgi HTTP/1.1"
-            it.fieldMap["Host"] = bridge.serverHostname
-            it.fieldMap["Content-Type"] = "image/jpeg"
-            it.fieldMap["Content-Length"] = bodySize.toString()
-            it.fieldMap["Connection"] = "Keep-Alive"
+            it.startLine = "POST /vpnsvc/connect.cgi HTTP/1.1"
+            it.fields["Host"] = bridge.serverHostname
+            it.fields["Content-Type"] = "image/jpeg"
+            it.fields["Content-Length"] = bodySize.toString()
+            it.fields["Connection"] = "Keep-Alive"
         }
 
 
@@ -142,21 +146,17 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
             it.array()
         }
 
-        bridge.controlChannel.send(request)
-        val response = bridge.softEtherChannel.receive()
+        bridge.tcpTerminal!!.sendHttpMessage(request)
+        bridge.httpRequestChannel.send(true)
+        val response = mailbox.receive()
 
         receivedPack = PropertyPack().also {
-            val buffer = ByteBuffer.wrap(response.body!!)
-            assertOrThrow(ErrorCode.SOFTETHER_INVALID_PROPERTY_PACK) {
-                it.read(buffer)
-            }
+            it.read(ByteBuffer.wrap(response.body!!))
         }
 
-        assertOrThrow(ErrorCode.SOFTETHER_INVALID_PROTOCOL_SERVER) {
-            assertAlways(response.header == HTTP_200_HEADER)
-            assertAlways(receivedPack.intProperties[SEP_ERROR] == null)
-            assertAlways(receivedPack.bytesProperties[SEP_RANDOM] != null)
-        }
+        assertAlways(response.startLine == HTTP_200_HEADER)
+        assertAlways(receivedPack!!.intProperties[SEP_ERROR] == null)
+        assertAlways(receivedPack!!.bytesProperties[SEP_RANDOM] != null)
     }
 
     private fun calcSecurePassword(): ByteArray {
@@ -165,7 +165,7 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
 
         val hashedPassword = hashSha0(password + uppercaseUsername)
 
-        return hashSha0(hashedPassword + receivedPack.bytesProperties[SEP_RANDOM]!!)
+        return hashSha0(hashedPassword + receivedPack!!.bytesProperties[SEP_RANDOM]!!)
     }
 
     private fun preparePropertyPack(): ByteArray {
@@ -196,9 +196,9 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
         pack.asciiProperties[SEP_SERVER_HOSTNAME] = bridge.socket.inetAddress.hostName
         pack.addressProperties[SEP_SERVER_IP_ADDRESS] = bridge.socket.inetAddress.address.copyOf()
         pack.intProperties[SEP_SERVER_PORT2] = bridge.socket.port
-        pack.intProperties[SEP_SERVER_PRODUCT_BUILD] = receivedPack.intProperties[SEP_BUILD] ?: 0
-        pack.asciiProperties[SEP_SERVER_PRODUCT_NAME] = receivedPack.asciiProperties[SEP_HELLO] ?: ""
-        pack.intProperties[SEP_SERVER_PRODUCT_VER] = receivedPack.intProperties[SEP_VERSION] ?: 0
+        pack.intProperties[SEP_SERVER_PRODUCT_BUILD] = receivedPack!!.intProperties[SEP_BUILD] ?: 0
+        pack.asciiProperties[SEP_SERVER_PRODUCT_NAME] = receivedPack!!.asciiProperties[SEP_HELLO] ?: ""
+        pack.intProperties[SEP_SERVER_PRODUCT_VER] = receivedPack!!.intProperties[SEP_VERSION] ?: 0
 
         pack.asciiProperties[SEP_METHOD] = "login"
         pack.intProperties[SEP_AUTH_TYPE] = 1
@@ -232,58 +232,56 @@ internal class SoftEtherClient(private val bridge: SharedBridge) {
 
     private suspend fun uploadProperties() {
         val request = HttpMessage().also {
-            it.header = "POST /vpnsvc/vpn.cgi HTTP/1.1"
+            it.startLine = "POST /vpnsvc/vpn.cgi HTTP/1.1"
             it.body = preparePropertyPack()
-            it.fieldMap["Host"] = bridge.serverHostname
-            it.fieldMap["Content-Type"] = "application/octet-stream"
-            it.fieldMap["Content-Length"] = it.body!!.size.toString()
-            it.fieldMap["Connection"] = "Keep-Alive"
-            it.fieldMap["Keep-Alive"] = HTTP_KEEP_ALIVE
+            it.fields["Host"] = bridge.serverHostname
+            it.fields["Content-Type"] = "application/octet-stream"
+            it.fields["Content-Length"] = it.body!!.size.toString()
+            it.fields["Connection"] = "Keep-Alive"
+            it.fields["Keep-Alive"] = HTTP_KEEP_ALIVE
         }
 
-        bridge.controlChannel.send(request)
-        val response = bridge.softEtherChannel.receive()
+        bridge.tcpTerminal!!.sendHttpMessage(request)
+        bridge.httpRequestChannel.send(true)
+        val response = mailbox.receive()
 
         val pack = PropertyPack().also {
-            val buffer = ByteBuffer.wrap(response.body!!)
-            assertOrThrow(ErrorCode.SOFTETHER_INVALID_PROPERTY_PACK) {
-                it.read(buffer)
-            }
+            it.read(ByteBuffer.wrap(response.body!!))
         }
 
-        assertOrThrow(ErrorCode.SOFTETHER_AUTHENTICATION_FAILED) {
-            assertAlways(response.header == HTTP_200_HEADER)
-            assertAlways(pack.intProperties[SEP_ERROR] == null)
-        }
+        assertAlways(response.startLine == HTTP_200_HEADER)
+        assertAlways(pack.intProperties[SEP_ERROR] == null)
 
         bridge.udpAccelerationConfig?.also { config ->
-            assertOrThrow(ErrorCode.UDP_INVALID_CONFIGURATION_ASSIGNED) {
-                // notify disabled denied
-                assertAlways(pack.intProperties[SEP_UDP_VERSION] == 2)
-                assertAlways(pack.booleanProperties[SEP_UDP_USE_ENCRYPTION] == true)
-                assertAlways(pack.booleanProperties[SEP_UDP_ENABLE_FAST_DISCONNECT_DETECT] == true)
+            // notify disabled denied
+            assertAlways(pack.intProperties[SEP_UDP_VERSION] == 2)
+            assertAlways(pack.booleanProperties[SEP_UDP_USE_ENCRYPTION] == true)
+            assertAlways(pack.booleanProperties[SEP_UDP_ENABLE_FAST_DISCONNECT_DETECT] == true)
 
-                pack.intProperties[SEP_UDP_CLIENT_COOKIE]?.also {
-                    config.clientCookie = it
-                } ?: throw AssertionError()
+            pack.intProperties[SEP_UDP_CLIENT_COOKIE]?.also {
+                config.clientCookie = it
+            } ?: throw AssertionError()
 
-                pack.addressProperties[SEP_UDP_SERVER_IP]?.also {
-                    config.serverReportedAddress = Inet4Address.getByAddress(it) as Inet4Address
-                } ?: throw AssertionError()
+            pack.addressProperties[SEP_UDP_SERVER_IP]?.also {
+                config.serverReportedAddress = Inet4Address.getByAddress(it) as Inet4Address
+            } ?: throw AssertionError()
 
-                pack.intProperties[SEP_UDP_SERVER_PORT]?.also {
-                    config.serverReportedPort = it
-                } ?: throw AssertionError()
+            pack.intProperties[SEP_UDP_SERVER_PORT]?.also {
+                config.serverReportedPort = it
+            } ?: throw AssertionError()
 
-                pack.intProperties[SEP_UDP_SERVER_COOKIE]?.also {
-                    config.serverCookie = it
-                } ?: throw AssertionError()
+            pack.intProperties[SEP_UDP_SERVER_COOKIE]?.also {
+                config.serverCookie = it
+            } ?: throw AssertionError()
 
-                pack.bytesProperties[SEP_UDP_SERVER_KEY_V2]?.also {
-                    config.serverKey = SecretKeySpec(it.copyOf(CHACHA20_POLY1305_KEY_SIZE), UDP_CIPHER_ALGORITHM)
-                } ?: throw AssertionError()
-
-            }
+            pack.bytesProperties[SEP_UDP_SERVER_KEY_V2]?.also {
+                config.serverKey = SecretKeySpec(it.copyOf(CHACHA20_POLY1305_KEY_SIZE), UDP_CIPHER_ALGORITHM)
+            } ?: throw AssertionError()
         }
+    }
+
+    internal fun cancel() {
+        jobNegotiation?.cancel()
+        mailbox.close()
     }
 }

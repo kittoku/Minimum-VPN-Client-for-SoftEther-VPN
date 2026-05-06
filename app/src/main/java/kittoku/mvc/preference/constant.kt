@@ -13,6 +13,7 @@ internal enum class MvcPreference {
     SSL_DO_SELECT_SUITES,
     SSL_SUITES,
     UDP_ENABLE_ACCELERATION,
+    UDP_STATUS, // used as volatile information
     ETHERNET_MTU,
     ETHERNET_MAC_ADDRESS,
     LOG_DO_SAVE_LOG,

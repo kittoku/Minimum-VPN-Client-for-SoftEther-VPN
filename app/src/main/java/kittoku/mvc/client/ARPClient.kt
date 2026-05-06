@@ -1,12 +1,13 @@
 package kittoku.mvc.client
 
 import kittoku.mvc.ControlMessage
+import kittoku.mvc.Result
 import kittoku.mvc.SharedBridge
-import kittoku.mvc.debug.ErrorCode
-import kittoku.mvc.debug.MvcException
+import kittoku.mvc.Where
 import kittoku.mvc.extension.isSame
 import kittoku.mvc.extension.read
 import kittoku.mvc.extension.toBroadcastAddress
+import kittoku.mvc.teminal.isEchoFrame
 import kittoku.mvc.unit.ARPPacket
 import kittoku.mvc.unit.ARP_OPCODE_REPLY
 import kittoku.mvc.unit.ARP_OPCODE_REQUEST
@@ -14,6 +15,8 @@ import kittoku.mvc.unit.ETHERNET_BROADCAST_ADDRESS
 import kittoku.mvc.unit.ETHERNET_UNKNOWN_ADDRESS
 import kittoku.mvc.unit.ETHER_TYPE_ARP
 import kittoku.mvc.unit.EthernetFrame
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -21,33 +24,42 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 internal const val ARP_NEGOTIATION_TIMEOUT: Long = 30_000
 internal class ARPClient(private val bridge: SharedBridge) {
-    internal fun launchJobInitial() { // resolve default gateway MAC address
-        bridge.scope.launch(bridge.handler) {
+    internal val mailbox = Channel<EthernetFrame>(Channel.BUFFERED)
+    private var jobNegotiation: Job? = null
+    private var jobControl: Job? = null
+
+    internal fun launchJobNegotiation() { // resolve default gateway MAC address
+        jobNegotiation = bridge.scope.launch(bridge.handler) {
             while (isActive) {
                 val reply = startResolveDefaultGatewaySequence(DHCP_RESEND_MESSAGE_TIMEOUT) ?: continue
 
                 if (!registerArpInformation(reply)) {
-                    throw MvcException(ErrorCode.ARP_INVALID_CONFIGURATION_ASSIGNED, null)
+                    bridge.controlMailbox.send(ControlMessage(Where.ARP, Result.INVALID_CONFIGURATION))
                 }
 
                 break
             }
 
-            bridge.controlMailbox.send(ControlMessage.ARP_NEGOTIATION_FINISHED)
+            bridge.controlMailbox.send(ControlMessage(Where.ARP, Result.PROCEEDED))
         }
     }
 
-    internal fun launchReplyBeacon() {
-        bridge.scope.launch(bridge.handler) {
-            val packet = ARPPacket().also {
-                it.opcode = ARP_OPCODE_REPLY
-                it.senderIp.read(bridge.assignedIpAddress)
-                it.senderMac.read(bridge.clientMacAddress)
-                it.targetIp.read(bridge.assignedIpAddress.toBroadcastAddress(bridge.subnetMask))
-                it.targetMac.read(ETHERNET_BROADCAST_ADDRESS)
-            }
+    internal fun launchJobControl() {
+        jobControl = bridge.scope.launch(bridge.handler) {
+            while (isActive) {
+                val received = mailbox.receive()
+                if (isEchoFrame(received)) {
+                    val packet = ARPPacket().also {
+                        it.opcode = ARP_OPCODE_REPLY
+                        it.senderIp.read(bridge.assignedIpAddress)
+                        it.senderMac.read(bridge.clientMacAddress)
+                        it.targetIp.read(bridge.assignedIpAddress.toBroadcastAddress(bridge.subnetMask))
+                        it.targetMac.read(ETHERNET_BROADCAST_ADDRESS)
+                    }
 
-            sendAsBroadcast(packet)
+                    sendAsBroadcast(packet)
+                }
+            }
         }
     }
 
@@ -69,12 +81,12 @@ internal class ARPClient(private val bridge: SharedBridge) {
             it.payloadARPPacket = packet
         }
 
-        bridge.controlChannel.send(frame)
+        bridge.tcpTerminal!!.sendFrame(frame)
     }
 
     private suspend fun expectReplyPacket(): ARPPacket? {
         while (true) {
-            val reply = extractMessageToMe(bridge.arpChannel.receive()) ?: continue
+            val reply = extractMessageToMe(mailbox.receive()) ?: continue
 
             return if (reply.opcode == ARP_OPCODE_REPLY) {
                 reply
@@ -106,5 +118,11 @@ internal class ARPClient(private val bridge: SharedBridge) {
         bridge.defaultGatewayMacAddress.read(reply.senderMac)
 
         return true
+    }
+
+    internal fun cancel() {
+        jobNegotiation?.cancel()
+        jobControl?.cancel()
+        mailbox.close()
     }
 }

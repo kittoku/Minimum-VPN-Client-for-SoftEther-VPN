@@ -7,15 +7,17 @@ import kittoku.mvc.extension.toIntAsUShort
 import kittoku.mvc.unit.dhcp.DhcpMessage
 import java.nio.ByteBuffer
 
+
 internal const val UDP_HEADER_SIZE = 8
 internal const val UDP_CORRECT_CHECKSUM: Short = -1
 
-internal const val UDP_PORT_DHCP_SEVER = 67
-internal const val UDP_PORT_DHCP_CLIENT = 68
+internal const val UDP_PORT_ECHO: Short = 7
+internal const val UDP_PORT_DHCP_SEVER: Short = 67
+internal const val UDP_PORT_DHCP_CLIENT: Short = 68
 
 internal class UDPDatagram : DataUnit { // for only TCP Connection, not UDP acceleration
-    internal var srcPort = 0
-    internal var dstPort = 0
+    internal var srcPort: Short = 0
+    internal var dstPort: Short = 0
 
     internal var payloadDhcpMessage: DhcpMessage? = null
     internal var payloadUnknown: ByteArray? = null
@@ -37,8 +39,8 @@ internal class UDPDatagram : DataUnit { // for only TCP Connection, not UDP acce
     override fun write(buffer: ByteBuffer) {
         val startUdp = buffer.position()
 
-        buffer.putShort(srcPort.toShort())
-        buffer.putShort(dstPort.toShort())
+        buffer.putShort(srcPort)
+        buffer.putShort(dstPort)
         buffer.putShort(length.toShort())
 
         val startChecksum = buffer.position()
@@ -64,8 +66,8 @@ internal class UDPDatagram : DataUnit { // for only TCP Connection, not UDP acce
     override fun read(buffer: ByteBuffer) {
         val startUdp = buffer.position()
 
-        srcPort = buffer.short.toIntAsUShort()
-        dstPort = buffer.short.toIntAsUShort()
+        srcPort = buffer.short
+        dstPort = buffer.short
 
         val payloadLength = buffer.short - UDP_HEADER_SIZE
         assertAlways(payloadLength >= 0)

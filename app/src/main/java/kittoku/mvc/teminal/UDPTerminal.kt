@@ -1,19 +1,10 @@
 package kittoku.mvc.teminal
 
-import kittoku.mvc.ControlMessage
 import kittoku.mvc.SharedBridge
-import kittoku.mvc.debug.ErrorCode
-import kittoku.mvc.debug.MvcException
 import kittoku.mvc.extension.move
 import kittoku.mvc.extension.padZeroByte
 import kittoku.mvc.extension.toIntAsUShort
 import kittoku.mvc.extension.toStringOrNull
-import kittoku.mvc.unit.ETHERNET_MAC_ADDRESS_SIZE
-import kittoku.mvc.unit.ETHER_TYPE_IPv4
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.yield
@@ -38,17 +29,16 @@ private const val UDP_PACKET_BUFFER_SIZE = 1600
 private const val UDP_SOCKET_RECEIVE_BUFFER_SIZE = 2097152
 internal const val UDP_SOFTETHER_HEADER_SIZE = 23 // = Cookie + 2 * tick + size + Flag
 private const val UDP_MAX_PADDING_SIZE = 32
-
 private const val UDP_KEEP_ALIVE_TIMEOUT = 2_100
-private const val UDP_KEEP_ALIVE_MIN_INTERVAL = 500
-private const val UDP_KEEP_ALIVE_INTERVAL_DIFF = 500
+internal const val UDP_KEEP_ALIVE_MIN_INTERVAL = 500
+internal const val UDP_KEEP_ALIVE_INTERVAL_DIFF = 500
 
 private const val UDP_PACKET_AVAILABLE_TIME = 30_000
 
-private const val UDP_NATT_PORT = 5004
-private const val UDP_NATT_INTERVAL_INITIAL = 3_000
-private const val UDP_NATT_INTERVAL_MIN = 300_000
-private const val UDP_NATT_INTERVAL_DIFF = 300_000
+internal const val UDP_NATT_PORT = 5004
+internal const val UDP_NATT_INTERVAL_INITIAL = 3_000
+internal const val UDP_NATT_INTERVAL_MIN = 300_000
+internal const val UDP_NATT_INTERVAL_DIFF = 300_000
 
 internal const val UDP_NATT_IP_REGEX = """^IP=[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"""
 internal const val UDP_NATT_PORT_REGEX = """PORT=[0-9]+$"""
@@ -69,8 +59,6 @@ internal class UDPTerminal(private val bridge: SharedBridge) {
     private var lastReceivedClientTick: Long = 0
     private var lastReceivedServerTick: Long = 0
 
-    private lateinit var jobKeepAlive: Job
-    private lateinit var jobInquireNATT: Job
 
     private val socketMutex = Mutex()
     private val packetMutex = Mutex()
@@ -96,7 +84,7 @@ internal class UDPTerminal(private val bridge: SharedBridge) {
                 }
             }
 
-            throw MvcException(ErrorCode.UDP_NO_AVAILABLE_IP_ADDRESS, null)
+            throw Exception("There is no available IP address.")
         }
 
         socket = DatagramSocket(0, address)
@@ -110,41 +98,6 @@ internal class UDPTerminal(private val bridge: SharedBridge) {
         bridge.service.protect(socket)
     }
 
-    internal fun launchJobKeepAlive() {
-        jobKeepAlive = bridge.scope.launch(bridge.handler) {
-            val buffer = ByteBuffer.allocate(0)
-
-            while (isActive) {
-                sendData(buffer)
-
-                (UDP_KEEP_ALIVE_MIN_INTERVAL + bridge.random.nextInt(UDP_KEEP_ALIVE_INTERVAL_DIFF)).toLong().also {
-                    delay(it)
-                }
-            }
-        }
-    }
-
-    internal fun launchJobInquireNATT() {
-        jobInquireNATT = bridge.scope.launch(bridge.handler) {
-            val packet = DatagramPacket(
-                "B".toByteArray(Charsets.US_ASCII),
-                1, config.nattAddress, UDP_NATT_PORT
-            )
-
-            while (isActive) {
-                sendPacket(packet)
-
-                val interval = if (config.status == UDPStatus.OPEN) {
-                    UDP_NATT_INTERVAL_MIN + bridge.random.nextInt(UDP_NATT_INTERVAL_DIFF)
-                } else {
-                    UDP_NATT_INTERVAL_INITIAL
-                }
-
-                delay(interval.toLong())
-            }
-        }
-    }
-
     private fun expectPacket(): Boolean {
         try {
             socket.receive(incomingPacket)
@@ -154,7 +107,7 @@ internal class UDPTerminal(private val bridge: SharedBridge) {
         return false
     }
 
-    private suspend fun sendPacket(packet: DatagramPacket) {
+    internal suspend fun sendPacket(packet: DatagramPacket) {
         socketMutex.withLock {
             socket.send(packet)
         }
@@ -302,28 +255,11 @@ internal class UDPTerminal(private val bridge: SharedBridge) {
 
             decryptBuffer.limit(decryptBuffer.position() + realDataSize)
 
-
-            // parse frame
-            if (isToMeFrame(decryptBuffer, bridge.clientMacAddress)) {
-                decryptBuffer.move(ETHERNET_MAC_ADDRESS_SIZE)
-            } else continue
-
-            decryptBuffer.move(ETHERNET_MAC_ADDRESS_SIZE) // ignore sender's MAC address
-
-            if (decryptBuffer.short != ETHER_TYPE_IPv4) continue
-
-            if (isEchoFrame(decryptBuffer)) {
-                // send ARP Replay anyway
-                bridge.controlMailbox.send(ControlMessage.SECURE_NAT_ECHO_REQUEST)
-            }
-
             return decryptBuffer
         }
     }
 
     internal fun close() {
-        if (::jobKeepAlive.isInitialized) jobKeepAlive.cancel()
-        if (::jobInquireNATT.isInitialized) jobInquireNATT.cancel()
         socket.close()
     }
 }

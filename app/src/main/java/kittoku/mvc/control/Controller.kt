@@ -2,27 +2,21 @@ package kittoku.mvc.control
 
 import androidx.preference.PreferenceManager
 import kittoku.mvc.ControlMessage
+import kittoku.mvc.Result
 import kittoku.mvc.SharedBridge
+import kittoku.mvc.Where
 import kittoku.mvc.client.ARPClient
 import kittoku.mvc.client.ARP_NEGOTIATION_TIMEOUT
 import kittoku.mvc.client.DHCP_NEGOTIATION_TIMEOUT
 import kittoku.mvc.client.DhcpClient
 import kittoku.mvc.client.SOFTETHER_NEGOTIATION_TIMEOUT
 import kittoku.mvc.client.SoftEtherClient
-import kittoku.mvc.debug.ErrorCode
-import kittoku.mvc.debug.MvcException
 import kittoku.mvc.debug.assertAlways
-import kittoku.mvc.extension.clear
+import kittoku.mvc.io.incoming.IncomingManager
+import kittoku.mvc.io.outgoing.OutgoingManager
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.setBooleanPrefValue
-import kittoku.mvc.teminal.IPTerminal
-import kittoku.mvc.teminal.TCPTerminal
-import kittoku.mvc.teminal.UDPStatus
-import kittoku.mvc.teminal.UDPTerminal
-import kittoku.mvc.unit.EthernetFrame
-import kittoku.mvc.unit.HttpMessage
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -30,18 +24,16 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 
 internal class Controller(private val bridge: SharedBridge) {
-    private var tcpTerminal: TCPTerminal? = null
-    private var ipTerminal: IPTerminal? = null
-    private var udpTerminal: UDPTerminal? = null
+    private var incomingManager: IncomingManager? = null
+    private var outgoingManager: OutgoingManager? = null
 
     private var networkObserver: NetworkObserver? = null
     private var logWriter: LogWriter? = null
 
-    private lateinit var softEtherClient: SoftEtherClient
-    private lateinit var dhcpClient: DhcpClient
-    private lateinit var arpClient: ARPClient
+    private var softEtherClient: SoftEtherClient? = null
+    private var dhcpClient: DhcpClient? = null
+    private var arpClient: ARPClient? = null
 
-    private val mailbox = bridge.controlMailbox
 
     private var isClosing = false
     private val mutex = Mutex()
@@ -64,67 +56,70 @@ internal class Controller(private val bridge: SharedBridge) {
         jobMain = bridge.scope.launch(bridge.handler) {
             logWriter?.report("Connecting has been attempted")
 
-            tcpTerminal = TCPTerminal(bridge)
+
+            bridge.attachTCPTerminal()
 
             bridge.udpAccelerationConfig?.also {
                 it.initializeNATTAddress()
-                udpTerminal = UDPTerminal(bridge)
+                bridge.attachUDPTerminal()
             }
 
-            ipTerminal = IPTerminal(bridge)
+            bridge.attachIPTerminal()
+
+
+            IncomingManager(bridge).also {
+                it.launchJobTCP()
+                incomingManager = it
+            }
 
 
             // SoftEther negotiation
-            softEtherClient = SoftEtherClient(bridge).also { it.launchJobNegotiation() }
+            SoftEtherClient(bridge).also {
+                softEtherClient = it
+                incomingManager!!.registerMailbox(it)
+                it.launchJobNegotiation()
 
-            launchJobControlUnit()
-
-            withTimeoutOrNull(SOFTETHER_NEGOTIATION_TIMEOUT) {
-                repeat(2) {
-                    relaySoftEtherMessage()
+                if (!expectProceeded(Where.SOFTETHER, SOFTETHER_NEGOTIATION_TIMEOUT)) {
+                    return@launch
                 }
 
-                assertAlways(mailbox.receive() == ControlMessage.SOFTETHER_NEGOTIATION_FINISHED)
-                bridge.softEtherChannel.clear()
-            } ?: throw MvcException(ErrorCode.SOFTETHER_NEGOTIATION_TIMEOUT, null)
+                incomingManager!!.unregisterMailbox(it)
+            }
 
 
             // start to keep alive tcp
-            tcpTerminal!!.launchJobKeepAlive()
+            OutgoingManager(bridge).also {
+                it.launchJobTCPKeepAlive()
+                outgoingManager = it
+            }
 
 
             // DHCP negotiation
-            dhcpClient = DhcpClient(bridge).also { it.launchJobInitial() }
+            DhcpClient(bridge).also {
+                dhcpClient = it
+                incomingManager!!.registerMailbox(it)
+                it.launchJobNegotiation()
 
-            withTimeoutOrNull(DHCP_NEGOTIATION_TIMEOUT) {
-                while (isActive) {
-                    relayDhcpMessage()
-
-                    if (mailbox.tryReceive()
-                            .getOrNull() == ControlMessage.DHCP_NEGOTIATION_FINISHED
-                    ) {
-                        bridge.dhcpChannel.clear()
-                        break
-                    }
+                if (!expectProceeded(Where.DHCP, DHCP_NEGOTIATION_TIMEOUT)) {
+                    return@launch
                 }
-            } ?: throw MvcException(ErrorCode.DHCP_NEGOTIATION_TIMEOUT, null)
+
+                incomingManager!!.unregisterMailbox(dhcpClient)
+            }
 
 
             // ARP negotiation
-            arpClient = ARPClient(bridge).also { it.launchJobInitial() }
+            ARPClient(bridge).also {
+                arpClient = it
+                incomingManager!!.registerMailbox(it)
+                it.launchJobNegotiation()
 
-            withTimeoutOrNull(ARP_NEGOTIATION_TIMEOUT) {
-                while (isActive) {
-                    relayAprPacket()
-
-                    if (mailbox.tryReceive()
-                            .getOrNull() == ControlMessage.ARP_NEGOTIATION_FINISHED
-                    ) {
-                        bridge.arpChannel.clear()
-                        break
-                    }
+                if (!expectProceeded(Where.ARP, ARP_NEGOTIATION_TIMEOUT)) {
+                    return@launch
                 }
-            } ?: throw MvcException(ErrorCode.ARP_NEGOTIATION_TIMEOUT, null)
+
+                it.launchJobControl()
+            }
 
 
             // if this is test, we need to get out because VpnService.Builder is not given
@@ -138,125 +133,51 @@ internal class Controller(private val bridge: SharedBridge) {
 
 
             // Establish VPN connection
-            tcpTerminal!!.setTimeoutForData()
-            ipTerminal!!.initializeBuilder()
-            ipTerminal!!.launchJobRetrieve()
-            launchJobOutgoing()
-            launchJobTCPIncoming()
+            bridge.tcpTerminal!!.setTimeoutForData()
+            bridge.ipTerminal!!.initializeBuilder()
+            outgoingManager!!.launchJobRetrieve()
+            outgoingManager!!.launchJobMain()
             bridge.udpAccelerationConfig?.also {
-                launchJobUDPIncoming()
+                outgoingManager!!.launchJobUDPKeepAlive()
+                outgoingManager!!.launchJobInquireNATT()
+                incomingManager!!.launchJobUDP()
             }
 
             logWriter?.report("VPN connection has been established")
 
 
-            // routine processing control messages
-            while (isActive) {
-                when (mailbox.receive()) {
-                    ControlMessage.SECURE_NAT_ECHO_REQUEST -> arpClient.launchReplyBeacon()
-                    else -> throw NotImplementedError()
-                }
-            }
+            expectProceeded(Where.CONTROL, null) // wait until disconnection
         }
     }
 
-    private fun launchJobControlUnit() {
-        jobControlUnit = bridge.scope.launch(bridge.handler) {
-            while (isActive) {
-                when (val received = bridge.controlChannel.receive()) {
-                    is HttpMessage -> {
-                        tcpTerminal!!.sendHttpMessage(received)
-                    }
-
-                    is EthernetFrame -> {
-                        tcpTerminal!!.sendFrame(received)
-                    }
-
-                    else -> throw NotImplementedError()
-                }
-            }
+    private suspend fun expectProceeded(where: Where, timeout: Long?): Boolean {
+        val received = if (timeout != null) {
+            withTimeoutOrNull(timeout) {
+                bridge.controlMailbox.receive()
+            } ?: ControlMessage(where, Result.ERR_TIMEOUT)
+        } else {
+            bridge.controlMailbox.receive()
         }
-    }
 
-    private fun launchJobTCPIncoming() {
-        jobTCPIncoming = bridge.scope.launch(bridge.handler) {
-            while (isActive) {
-                tcpTerminal!!.consumeIPPacketBuffer {
-                    ipTerminal!!.feedIncomingPacket(it)
-                }
-            }
+        if (received.result == Result.PROCEEDED) {
+            assertAlways(received.from == where)
+
+            return true
         }
-    }
 
-    private fun launchJobUDPIncoming() {
-        jobUDPIncoming = bridge.scope.launch(bridge.handler) {
-            udpTerminal!!.launchJobKeepAlive()
-            udpTerminal!!.launchJobInquireNATT()
+        kill(null)
 
-            while (isActive) {
-                udpTerminal!!.receivePacket().also {
-                    ipTerminal!!.feedIncomingPacket(it)
-                }
-            }
+        val header = "${received.from.name}: ${received.result.name}"
+        var log = header
+        if (received.supplement != null) {
+            log += "\n${received.supplement}"
         }
-    }
 
-    private fun launchJobOutgoing() {
-        jobOutgoing = bridge.scope.launch(bridge.handler) {
-            var lastUDPStatus = UDPStatus.CLOSED
+        logWriter?.report(log)
+        bridge.service.notifyError(header)
 
-            while (isActive) {
-                val firstPacket = ipTerminal!!.waitOutgoingPacket()
 
-                // send through UDP hole if possible
-                if (udpTerminal != null) {
-                    val currentUDPStatus = bridge.udpAccelerationConfig!!.status
-
-                    if (currentUDPStatus != lastUDPStatus) {
-                        networkObserver!!.enforceUpdateSummary()
-                        lastUDPStatus = currentUDPStatus
-                    }
-
-                    if (currentUDPStatus == UDPStatus.OPEN) {
-                        udpTerminal!!.sendData(firstPacket)
-                        continue
-                    }
-                }
-
-                // finally TCP connection is needed
-                tcpTerminal!!.loadOutgoingPacket(firstPacket)
-
-                while (isActive) {
-                    val polled = ipTerminal!!.pollOutgoingPacket() ?: break
-
-                    val isAddable = tcpTerminal!!.addOutGoingPacket(polled)
-                    if (!isAddable) break
-                }
-
-                tcpTerminal!!.sendOutgoingPacket()
-            }
-        }
-    }
-
-    private suspend fun relaySoftEtherMessage() {
-        val response = tcpTerminal!!.receiveHttpMessage()
-        bridge.softEtherChannel.send(response)
-    }
-
-    private suspend fun relayDhcpMessage() {
-        tcpTerminal!!.consumeFrame {
-            if (it.payloadIPv4Packet?.payloadUDPDatagram?.payloadDhcpMessage != null) {
-                bridge.dhcpChannel.send(it)
-            }
-        }
-    }
-
-    private suspend fun relayAprPacket() {
-        tcpTerminal!!.consumeFrame {
-            if (it.payloadARPPacket != null) {
-                bridge.arpChannel.send(it)
-            }
-        }
+        return false
     }
 
     internal fun kill(throwable: Throwable?) {
@@ -264,21 +185,13 @@ internal class Controller(private val bridge: SharedBridge) {
             mutex.withLock {
                 if (!isClosing) {
                     if (throwable != null) {
-                        // report exception first
-                        var message = "Disconnected because of "
-
-                        message += if (throwable is MvcException) {
-                            throwable.message
-                        } else {
-                            "UNKNOWN EXCEPTION/ERROR"
-                        }
-
                         logWriter?.reportThrowable(throwable)
-                        bridge.service.notifyError(message)
+                        bridge.service.notifyError("MVC: ERR_UNEXPECTED")
                     }
 
                     isClosing = true
 
+                    cancelClients()
                     closeTerminals()
                     networkObserver?.close()
                     cancelJobs()
@@ -301,6 +214,14 @@ internal class Controller(private val bridge: SharedBridge) {
         }
     }
 
+    private fun cancelClients() {
+        softEtherClient?.cancel()
+        dhcpClient?.cancel()
+        arpClient?.cancel()
+        incomingManager?.cancel()
+        outgoingManager?.cancel()
+    }
+
     private fun cancelJobs() {
         jobMain?.cancel()
         jobControlUnit?.cancel()
@@ -310,8 +231,8 @@ internal class Controller(private val bridge: SharedBridge) {
     }
 
     private fun closeTerminals() {
-        tcpTerminal?.close()
-        udpTerminal?.close()
-        ipTerminal?.close()
+        bridge.tcpTerminal?.close()
+        bridge.udpTerminal?.close()
+        bridge.ipTerminal?.close()
     }
 }

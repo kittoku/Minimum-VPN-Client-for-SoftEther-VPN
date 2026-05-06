@@ -1,5 +1,6 @@
 package kittoku.mvc.control
 
+import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
@@ -15,6 +16,7 @@ import kittoku.mvc.teminal.UDPStatus
 internal class NetworkObserver(val bridge: SharedBridge) {
     private val manager = bridge.service.getSystemService(ConnectivityManager::class.java)
     private val callback: ConnectivityManager.NetworkCallback
+    private val updListener: SharedPreferences.OnSharedPreferenceChangeListener
     private val prefs = PreferenceManager.getDefaultSharedPreferences(bridge.service)
 
     init {
@@ -33,6 +35,16 @@ internal class NetworkObserver(val bridge: SharedBridge) {
         }
 
         manager.registerNetworkCallback(request, callback)
+
+        setStringPrefValue("", MvcPreference.UDP_STATUS, prefs)
+
+        updListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == MvcPreference.UDP_STATUS.name) {
+                enforceUpdateSummary()
+            }
+        }
+
+        prefs.registerOnSharedPreferenceChangeListener(updListener)
     }
 
     private fun updateSummary(properties: LinkProperties) {
@@ -81,6 +93,8 @@ internal class NetworkObserver(val bridge: SharedBridge) {
     }
 
     internal fun close() {
+        prefs.unregisterOnSharedPreferenceChangeListener(updListener)
+
         try {
             manager.unregisterNetworkCallback(callback)
         } catch (_: IllegalArgumentException) { } // already unregistered

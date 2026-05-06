@@ -16,14 +16,14 @@ import kittoku.mvc.preference.accessor.setStringPrefValue
 import kittoku.mvc.service.SoftEtherVpnService
 import kittoku.mvc.teminal.CHACHA20_POLY1305_NONCE_SIZE
 import kittoku.mvc.teminal.CHACHA20_POLY1305_TAG_SIZE
+import kittoku.mvc.teminal.IPTerminal
+import kittoku.mvc.teminal.TCPTerminal
 import kittoku.mvc.teminal.UDPStatus
+import kittoku.mvc.teminal.UDPTerminal
 import kittoku.mvc.teminal.UDP_SOFTETHER_HEADER_SIZE
-import kittoku.mvc.unit.DataUnit
 import kittoku.mvc.unit.ETHERNET_HEADER_SIZE
 import kittoku.mvc.unit.ETHERNET_MAC_ADDRESS_SIZE
 import kittoku.mvc.unit.ETHERNET_MAX_MTU
-import kittoku.mvc.unit.EthernetFrame
-import kittoku.mvc.unit.HttpMessage
 import kittoku.mvc.unit.IPv4_ADDRESS_SIZE
 import kittoku.mvc.unit.IPv4_HEADER_SIZE
 import kittoku.mvc.unit.UDP_HEADER_SIZE
@@ -36,12 +36,26 @@ import javax.crypto.SecretKey
 import javax.net.ssl.SSLSocket
 
 
-internal enum class ControlMessage {
-    SOFTETHER_NEGOTIATION_FINISHED,
-    DHCP_NEGOTIATION_FINISHED,
-    ARP_NEGOTIATION_FINISHED,
-    SECURE_NAT_ECHO_REQUEST,
+internal enum class Where {
+    SOFTETHER,
+    DHCP,
+    ARP,
+    CONTROL,
 }
+
+internal enum class Result {
+    PROCEEDED,
+
+    // common errors
+    ERR_TIMEOUT,
+    INVALID_CONFIGURATION,
+}
+
+internal data class ControlMessage(
+    val from: Where,
+    val result: Result,
+    val supplement: String? = null
+)
 
 internal class UDPAccelerationConfig(random: SecureRandom) {
     internal var status = UDPStatus.CLOSED
@@ -113,8 +127,13 @@ internal class SharedBridge(internal val scope: CoroutineScope, internal val han
     internal lateinit var service: SoftEtherVpnService // separate from constructor for test
     internal lateinit var socket: SSLSocket
 
+    internal var tcpTerminal: TCPTerminal? = null
+    internal var udpTerminal: UDPTerminal? = null
+    internal var ipTerminal: IPTerminal? = null
+
     internal var isTest = false
     internal val controlMailbox = Channel<ControlMessage>(1)
+    internal val httpRequestChannel = Channel<Boolean>(1)
 
     internal var serverPort: Int = 0
     internal var serverHostname: String = ""
@@ -140,11 +159,6 @@ internal class SharedBridge(internal val scope: CoroutineScope, internal val han
 
     internal var dnsServerIpAddress: ByteArray? = null
     internal var leaseTime: Long? = null
-
-    internal val controlChannel = Channel<DataUnit>(1)
-    internal val softEtherChannel = Channel<HttpMessage>(1)
-    internal val dhcpChannel = Channel<EthernetFrame>(1)
-    internal val arpChannel = Channel<EthernetFrame>(1)
 
     internal var isLogEnabled = false
     internal var logDirectory: Uri? = null
@@ -206,5 +220,17 @@ internal class SharedBridge(internal val scope: CoroutineScope, internal val han
         }
 
         return addressString.toHexByteArray()
+    }
+
+    internal fun attachTCPTerminal() {
+        tcpTerminal = TCPTerminal(this)
+    }
+
+    internal fun attachUDPTerminal() {
+        udpTerminal = UDPTerminal(this)
+    }
+
+    internal fun attachIPTerminal() {
+        ipTerminal = IPTerminal(this)
     }
 }

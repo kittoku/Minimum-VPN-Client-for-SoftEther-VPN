@@ -1,9 +1,9 @@
 package kittoku.mvc.client
 
 import kittoku.mvc.ControlMessage
+import kittoku.mvc.Result
 import kittoku.mvc.SharedBridge
-import kittoku.mvc.debug.ErrorCode
-import kittoku.mvc.debug.MvcException
+import kittoku.mvc.Where
 import kittoku.mvc.extension.isSame
 import kittoku.mvc.extension.read
 import kittoku.mvc.unit.ETHERNET_BROADCAST_ADDRESS
@@ -32,6 +32,8 @@ import kittoku.mvc.unit.dhcp.DHCP_OPTION_ROUTER_ADDRESS
 import kittoku.mvc.unit.dhcp.DHCP_OPTION_SUBNET_MASK
 import kittoku.mvc.unit.dhcp.DhcpMessage
 import kittoku.mvc.unit.dhcp.OptionPack
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -41,20 +43,23 @@ internal const val DHCP_RESEND_MESSAGE_TIMEOUT: Long = 3_000
 internal const val DHCP_NEGOTIATION_TIMEOUT: Long = 30_000
 
 internal class DhcpClient(private val bridge: SharedBridge) {
-    internal fun launchJobInitial() {
-        bridge.scope.launch(bridge.handler) {
+    internal val mailbox = Channel<EthernetFrame>(Channel.BUFFERED)
+    private var jobNegotiation: Job? = null
+
+    internal fun launchJobNegotiation() {
+        jobNegotiation = bridge.scope.launch(bridge.handler) {
             while (isActive) {
                 val offer = startDiscoverOfferSequence(DHCP_RESEND_MESSAGE_TIMEOUT) ?: continue
                 val ack = startRequestAckSequence(offer, DHCP_RESEND_MESSAGE_TIMEOUT) ?: continue
 
                 if (!registerDhcpInformation(ack)) {
-                    throw MvcException(ErrorCode.DHCP_INVALID_CONFIGURATION_ASSIGNED, null)
+                    bridge.controlMailbox.send(ControlMessage(Where.DHCP, Result.INVALID_CONFIGURATION))
                 }
 
                 break
             }
 
-            bridge.controlMailbox.send(ControlMessage.DHCP_NEGOTIATION_FINISHED)
+            bridge.controlMailbox.send(ControlMessage(Where.DHCP, Result.PROCEEDED))
         }
     }
 
@@ -112,13 +117,12 @@ internal class DhcpClient(private val bridge: SharedBridge) {
             it.payloadIPv4Packet = packet
         }
 
-        bridge.controlChannel.send(frame)
+        bridge.tcpTerminal!!.sendFrame(frame)
     }
 
     private suspend fun expectOfferMessage(transactionId: Int): DhcpMessage? {
         while (true) {
-            val received = bridge.dhcpChannel.receive()
-            val reply = extractMessageToMe(received) ?: continue
+            val reply = extractMessageToMe(mailbox.receive()) ?: continue
             if (reply.transactionId != transactionId) continue
 
             return if (reply.options.byteOptions[DHCP_OPTION_MESSAGE_TYPE] == DHCP_MESSAGE_TYPE_OFFER) {
@@ -129,7 +133,7 @@ internal class DhcpClient(private val bridge: SharedBridge) {
 
     private suspend fun expectAckMessage(transactionId: Int): DhcpMessage? {
         while (true) {
-            val reply = extractMessageToMe(bridge.dhcpChannel.receive()) ?: continue
+            val reply = extractMessageToMe(mailbox.receive()) ?: continue
             if (reply.transactionId != transactionId) continue
 
             return if (reply.options.byteOptions[DHCP_OPTION_MESSAGE_TYPE] == DHCP_MESSAGE_TYPE_ACK) {
@@ -208,5 +212,10 @@ internal class DhcpClient(private val bridge: SharedBridge) {
         }
 
         return true
+    }
+
+    internal fun cancel() {
+        jobNegotiation?.cancel()
+        mailbox.close()
     }
 }
