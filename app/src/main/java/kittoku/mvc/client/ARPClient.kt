@@ -48,6 +48,11 @@ internal class ARPClient(private val bridge: SharedBridge) {
         jobControl = bridge.scope.launch(bridge.handler) {
             while (isActive) {
                 val received = mailbox.receive()
+
+                if (isARPRequest(received)) {
+                    processARPRequest(received)
+                }
+
                 if (isEchoFrame(received)) {
                     val packet = ARPPacket().also {
                         it.opcode = ARP_OPCODE_REPLY
@@ -60,6 +65,33 @@ internal class ARPClient(private val bridge: SharedBridge) {
                     sendAsBroadcast(packet)
                 }
             }
+        }
+    }
+
+    private fun isARPRequest(frame: EthernetFrame): Boolean {
+        val arpPacket = frame.payloadARPPacket ?: return false
+
+        return (arpPacket.targetIp.isSame(bridge.assignedIpAddress) && arpPacket.opcode == ARP_OPCODE_REQUEST)
+    }
+
+    private suspend fun processARPRequest(requestFrame: EthernetFrame) {
+        val requestPacket = requestFrame.payloadARPPacket!!
+
+        val replyPacket = ARPPacket().also {
+            it.opcode = ARP_OPCODE_REPLY
+            it.senderIp.read(bridge.assignedIpAddress)
+            it.senderMac.read(bridge.clientMacAddress)
+            it.targetIp.read(requestPacket.senderIp)
+            it.targetMac.read(requestPacket.senderMac)
+        }
+
+        EthernetFrame().also {
+            it.etherType = ETHER_TYPE_ARP
+            it.dstMac.read(requestFrame.srcMac)
+            it.srcMac.read(bridge.clientMacAddress)
+            it.payloadARPPacket = replyPacket
+
+            bridge.tcpTerminal!!.sendFrame(it)
         }
     }
 
