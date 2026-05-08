@@ -1,4 +1,4 @@
-# Minimum VPN Client for SoftEther VPN
+# Minimum VPN Client for SoftEther VPN <img src="images/icon.png" height="40">
 This is an open-source SoftEther-VPN-protocol-based VPN client for Android
 
 ## Notice
