@@ -33,7 +33,9 @@ internal class HomeFragment : PreferenceFragmentCompat() {
     }
 
     private fun startVpnService(action: String) {
-        context?.startService(Intent(context, SoftEtherVpnService::class.java).setAction(action))
+        val intent = Intent(requireContext(), SoftEtherVpnService::class.java).setAction(action)
+
+        requireContext().startForegroundService(intent)
     }
 
     private fun attachSwitchListener() {

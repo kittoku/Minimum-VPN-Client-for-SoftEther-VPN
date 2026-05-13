@@ -6,8 +6,6 @@ import kittoku.mvc.SharedBridge
 import kittoku.mvc.Where
 import kittoku.mvc.extension.isSame
 import kittoku.mvc.extension.read
-import kittoku.mvc.extension.toBroadcastAddress
-import kittoku.mvc.teminal.isEchoFrame
 import kittoku.mvc.unit.ARPPacket
 import kittoku.mvc.unit.ARP_OPCODE_REPLY
 import kittoku.mvc.unit.ARP_OPCODE_REQUEST
@@ -51,18 +49,6 @@ internal class ARPClient(private val bridge: SharedBridge) {
 
                 if (isARPRequest(received)) {
                     processARPRequest(received)
-                }
-
-                if (isEchoFrame(received)) {
-                    val packet = ARPPacket().also {
-                        it.opcode = ARP_OPCODE_REPLY
-                        it.senderIp.read(bridge.assignedIpAddress)
-                        it.senderMac.read(bridge.clientMacAddress)
-                        it.targetIp.read(bridge.assignedIpAddress.toBroadcastAddress(bridge.subnetMask))
-                        it.targetMac.read(ETHERNET_BROADCAST_ADDRESS)
-                    }
-
-                    sendAsBroadcast(packet)
                 }
             }
         }

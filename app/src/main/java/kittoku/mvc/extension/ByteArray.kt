@@ -1,6 +1,5 @@
 package kittoku.mvc.extension
 
-import kittoku.mvc.unit.IPv4_ADDRESS_SIZE
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -49,20 +48,6 @@ internal fun ByteArray.read(other: ByteArray) {
 
 internal fun ByteArray.toInetAddress(): InetAddress {
     return InetAddress.getByAddress(this)
-}
-
-internal fun ByteArray.toBroadcastAddress(subnetMask: ByteArray): ByteArray {
-    if (this.size != IPv4_ADDRESS_SIZE || subnetMask.size != IPv4_ADDRESS_SIZE) {
-        throw NotImplementedError()
-    }
-
-    val thisAsInt = ByteBuffer.wrap(this).int
-    val maskAsInt = ByteBuffer.wrap(subnetMask).int
-    val result = ByteBuffer.allocate(IPv4_ADDRESS_SIZE)
-
-    result.putInt((thisAsInt and maskAsInt) or maskAsInt.inv())
-
-    return result.array()
 }
 
 internal fun ByteArray.toStringOrNull(charset: Charset): String? {

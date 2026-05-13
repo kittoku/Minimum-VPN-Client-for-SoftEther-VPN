@@ -17,7 +17,7 @@ import javax.net.ssl.SSLSocketFactory
 internal const val TCP_SOFTETHER_HEADER_SIZE = 8 + 4 // for first frame; 8 == SoftEther header, 4 == Frame Header
 private const val TCP_CONTROL_UNIT_WAIT_TIMEOUT = 10
 private const val TCP_DATA_UNIT_WAIT_TIMEOUT = 1_000
-private const val TCP_KEEP_ALIVE_TIMEOUT: Int = 20_000
+private const val TCP_KEEP_ALIVE_TIMEOUT = 20_000
 internal const val TCP_KEEP_ALIVE_MIN_INTERVAL = TCP_KEEP_ALIVE_TIMEOUT / 5
 internal const val TCP_KEEP_ALIVE_INTERVAL_DIFF = TCP_KEEP_ALIVE_TIMEOUT / 2 - TCP_KEEP_ALIVE_MIN_INTERVAL
 

@@ -6,9 +6,9 @@ import kittoku.mvc.client.DhcpClient
 import kittoku.mvc.client.SoftEtherClient
 import kittoku.mvc.extension.move
 import kittoku.mvc.teminal.TCP_SOFTETHER_HEADER_SIZE
-import kittoku.mvc.teminal.isDataPacket
-import kittoku.mvc.teminal.isEchoFrame
+import kittoku.mvc.teminal.isDhcpPacket
 import kittoku.mvc.teminal.isToMeFrame
+import kittoku.mvc.teminal.isToMePacket
 import kittoku.mvc.unit.ETHERNET_MAX_MTU
 import kittoku.mvc.unit.ETHER_TYPE_ARP
 import kittoku.mvc.unit.EthernetFrame
@@ -25,6 +25,10 @@ import kotlin.math.max
 internal class IncomingManager(internal val bridge: SharedBridge) {
     private val bufferSize = max(bridge.socket.session.applicationBufferSize, TCP_SOFTETHER_HEADER_SIZE + ETHERNET_MAX_MTU)
     private val buffer = ByteBuffer.allocate(bufferSize).also { it.limit(0) }
+
+    internal var nextTCPKeepAlive = 0L
+    internal var nextUDPKeepAlive = 0L
+    internal var nextUDPInquireNATT = 0L
 
     private var jobTCP: Job? = null
     private var jobUDP: Job? = null
@@ -62,10 +66,10 @@ internal class IncomingManager(internal val bridge: SharedBridge) {
             }
 
             while (isActive) {
+                trySendTCPKeepAlive()
+
                 bridge.tcpTerminal!!.ensureBytes(Int.SIZE_BYTES, buffer)
-
                 val numFrame = buffer.int
-
                 if (numFrame == KEEP_ALIVE_FRAME_NUM) {
                     buffer.move(-Int.SIZE_BYTES)
                     processKeepAlivePacket(buffer)
@@ -82,7 +86,7 @@ internal class IncomingManager(internal val bridge: SharedBridge) {
                         return@repeat
                     }
 
-                    if (isDataPacket(buffer)) {
+                    if (isToMePacket(buffer, bridge.assignedIpAddress) && !isDhcpPacket(buffer)) {
                         processDataPacket(frameSize, buffer)
                         return@repeat
                     }
@@ -91,7 +95,7 @@ internal class IncomingManager(internal val bridge: SharedBridge) {
                         it.readWithGivenSize(frameSize, buffer)
                     }
 
-                    if (frame.etherType == ETHER_TYPE_ARP || isEchoFrame(frame)) {
+                    if (frame.etherType == ETHER_TYPE_ARP) {
                         arpMailbox?.send(frame)
                         return@repeat
                     }
@@ -108,13 +112,16 @@ internal class IncomingManager(internal val bridge: SharedBridge) {
     internal fun launchJobUDP() {
         jobUDP = bridge.scope.launch(bridge.handler) {
             while (isActive) {
-                val received = bridge.udpTerminal!!.receivePacket()
+                trySendUDPInquireNATT()
+                trySendUDPKeepAlive()
+
+                val received = bridge.udpTerminal!!.tryReceivePacket() ?: continue
 
                 if (!isToMeFrame(received, bridge.clientMacAddress)) {
                     continue
                 }
 
-                if (isDataPacket(received)) {
+                if (isToMePacket(received, bridge.assignedIpAddress) && !isDhcpPacket(received)) {
                     processDataPacket(received.remaining(), received)
                     continue
                 }
@@ -123,7 +130,7 @@ internal class IncomingManager(internal val bridge: SharedBridge) {
                     it.readWithGivenSize(received.remaining(), received)
                 }
 
-                if (frame.etherType == ETHER_TYPE_ARP || isEchoFrame(frame)) {
+                if (frame.etherType == ETHER_TYPE_ARP) {
                     arpMailbox?.send(frame)
                     continue
                 }

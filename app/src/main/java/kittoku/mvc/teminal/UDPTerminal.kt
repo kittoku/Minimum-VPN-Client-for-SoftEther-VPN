@@ -7,7 +7,6 @@ import kittoku.mvc.extension.toIntAsUShort
 import kittoku.mvc.extension.toStringOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.yield
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.Inet4Address
@@ -179,84 +178,80 @@ internal class UDPTerminal(private val bridge: SharedBridge) {
         config.clientNATTPort = resultPort.substring(5).toInt()
     }
 
-    internal suspend fun receivePacket(): ByteBuffer {
-        while (true) {
-            yield()
-
-            val currentTime = System.currentTimeMillis()
-            if (currentTime - lastReceivedTick > UDP_KEEP_ALIVE_TIMEOUT) {
-                config.status = UDPStatus.CLOSED
-            }
-
-            if (!expectPacket()) {
-                continue
-            }
-
-            if (incomingPacket.address == config.nattAddress) {
-                processNATTInformation()
-                continue
-            }
-
-            if (incomingPacket.length < UDP_SOFTETHER_HEADER_SIZE) {
-                continue
-            }
-
-            serverCipher.init(
-                Cipher.DECRYPT_MODE,
-                config.serverKey,
-                IvParameterSpec(incomingPacket.data, 0, CHACHA20_POLY1305_NONCE_SIZE)
-            )
-
-            serverCipher.doFinal(
-                incomingPacket.data,
-                CHACHA20_POLY1305_NONCE_SIZE,
-                incomingPacket.length - CHACHA20_POLY1305_NONCE_SIZE,
-                decryptBuffer.array()
-            ).also {
-                decryptBuffer.position(0)
-                decryptBuffer.limit(it)
-            }
-
-            if (decryptBuffer.int != config.clientCookie) {
-                continue
-            }
-
-            val serverTick = decryptBuffer.long
-            if (serverTick >= lastReceivedServerTick) {
-                lastReceivedServerTick = serverTick
-
-                config.serverCurrentAddress = incomingPacket.address as Inet4Address
-                config.serverCurrentPort = incomingPacket.port
-            } else {
-                if (lastReceivedServerTick - serverTick >= UDP_PACKET_AVAILABLE_TIME) {
-                    continue
-                }
-            }
-
-            val clientTick = decryptBuffer.long
-            lastReceivedClientTick = max(clientTick, lastReceivedClientTick)
-            if (lastReceivedClientTick + UDP_PACKET_AVAILABLE_TIME >= currentTime) {
-                lastReceivedTick = currentTime
-            }
-
-            config.status = if (currentTime - lastReceivedTick > UDP_KEEP_ALIVE_TIMEOUT) {
-                UDPStatus.CLOSED
-            } else {
-                UDPStatus.OPEN
-            }
-
-            val realDataSize = decryptBuffer.short.toIntAsUShort()
-
-            decryptBuffer.move(1) // ignore flag
-
-            if (realDataSize <= 0) {
-                continue
-            }
-
-            decryptBuffer.limit(decryptBuffer.position() + realDataSize)
-
-            return decryptBuffer
+    internal fun tryReceivePacket(): ByteBuffer? {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastReceivedTick > UDP_KEEP_ALIVE_TIMEOUT) {
+            config.status = UDPStatus.CLOSED
         }
+
+        if (!expectPacket()) {
+            return null
+        }
+
+        if (incomingPacket.address == config.nattAddress) {
+            processNATTInformation()
+            return null
+        }
+
+        if (incomingPacket.length < UDP_SOFTETHER_HEADER_SIZE) {
+            return null
+        }
+
+        serverCipher.init(
+            Cipher.DECRYPT_MODE,
+            config.serverKey,
+            IvParameterSpec(incomingPacket.data, 0, CHACHA20_POLY1305_NONCE_SIZE)
+        )
+
+        serverCipher.doFinal(
+            incomingPacket.data,
+            CHACHA20_POLY1305_NONCE_SIZE,
+            incomingPacket.length - CHACHA20_POLY1305_NONCE_SIZE,
+            decryptBuffer.array()
+        ).also {
+            decryptBuffer.position(0)
+            decryptBuffer.limit(it)
+        }
+
+        if (decryptBuffer.int != config.clientCookie) {
+            return null
+        }
+
+        val serverTick = decryptBuffer.long
+        if (serverTick >= lastReceivedServerTick) {
+            lastReceivedServerTick = serverTick
+
+            config.serverCurrentAddress = incomingPacket.address as Inet4Address
+            config.serverCurrentPort = incomingPacket.port
+        } else {
+            if (lastReceivedServerTick - serverTick >= UDP_PACKET_AVAILABLE_TIME) {
+                return null
+            }
+        }
+
+        val clientTick = decryptBuffer.long
+        lastReceivedClientTick = max(clientTick, lastReceivedClientTick)
+        if (lastReceivedClientTick + UDP_PACKET_AVAILABLE_TIME >= currentTime) {
+            lastReceivedTick = currentTime
+        }
+
+        config.status = if (currentTime - lastReceivedTick > UDP_KEEP_ALIVE_TIMEOUT) {
+            UDPStatus.CLOSED
+        } else {
+            UDPStatus.OPEN
+        }
+
+        val realDataSize = decryptBuffer.short.toIntAsUShort()
+
+        decryptBuffer.move(1) // ignore flag
+
+        if (realDataSize <= 0) {
+            return null
+        }
+
+        decryptBuffer.limit(decryptBuffer.position() + realDataSize)
+
+        return decryptBuffer
     }
 
     internal fun close() {

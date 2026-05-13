@@ -24,6 +24,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 
 internal class Controller(private val bridge: SharedBridge) {
+    private var jobMain: Job? = null
+
     private var incomingManager: IncomingManager? = null
     private var outgoingManager: OutgoingManager? = null
 
@@ -34,15 +36,8 @@ internal class Controller(private val bridge: SharedBridge) {
     private var dhcpClient: DhcpClient? = null
     private var arpClient: ARPClient? = null
 
-
     private var isClosing = false
     private val mutex = Mutex()
-
-    private var jobMain: Job? = null
-    private var jobControlUnit: Job? = null
-    private var jobTCPIncoming: Job? = null
-    private var jobUDPIncoming: Job? = null
-    private var jobOutgoing: Job? = null
 
     internal fun run() {
         if (bridge.isLogEnabled && bridge.logDirectory != null) {
@@ -87,13 +82,6 @@ internal class Controller(private val bridge: SharedBridge) {
             }
 
 
-            // start to keep alive tcp
-            OutgoingManager(bridge).also {
-                it.launchJobTCPKeepAlive()
-                outgoingManager = it
-            }
-
-
             // DHCP negotiation
             DhcpClient(bridge).also {
                 dhcpClient = it
@@ -135,11 +123,14 @@ internal class Controller(private val bridge: SharedBridge) {
             // Establish VPN connection
             bridge.tcpTerminal!!.setTimeoutForData()
             bridge.ipTerminal!!.initializeBuilder()
-            outgoingManager!!.launchJobRetrieve()
-            outgoingManager!!.launchJobMain()
+
+            OutgoingManager(bridge).also {
+                outgoingManager = it
+                it.launchJobRetrieve()
+                it.launchJobMain()
+            }
+
             bridge.udpAccelerationConfig?.also {
-                outgoingManager!!.launchJobUDPKeepAlive()
-                outgoingManager!!.launchJobInquireNATT()
                 incomingManager!!.launchJobUDP()
             }
 
@@ -194,7 +185,7 @@ internal class Controller(private val bridge: SharedBridge) {
                     cancelClients()
                     closeTerminals()
                     networkObserver?.close()
-                    cancelJobs()
+                    jobMain?.cancel()
 
                     PreferenceManager.getDefaultSharedPreferences(bridge.service).also {
                         setBooleanPrefValue(false, MvcPreference.HOME_CONNECTOR, it)
@@ -220,14 +211,6 @@ internal class Controller(private val bridge: SharedBridge) {
         arpClient?.cancel()
         incomingManager?.cancel()
         outgoingManager?.cancel()
-    }
-
-    private fun cancelJobs() {
-        jobMain?.cancel()
-        jobControlUnit?.cancel()
-        jobTCPIncoming?.cancel()
-        jobUDPIncoming?.cancel()
-        jobOutgoing?.cancel()
     }
 
     private fun closeTerminals() {

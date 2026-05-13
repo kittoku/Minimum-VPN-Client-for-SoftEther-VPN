@@ -2,28 +2,17 @@ package kittoku.mvc.io.outgoing
 
 import androidx.preference.PreferenceManager
 import kittoku.mvc.SharedBridge
-import kittoku.mvc.control.NetworkObserver
 import kittoku.mvc.extension.move
 import kittoku.mvc.preference.MvcPreference
 import kittoku.mvc.preference.accessor.setStringPrefValue
-import kittoku.mvc.teminal.TCP_KEEP_ALIVE_INTERVAL_DIFF
-import kittoku.mvc.teminal.TCP_KEEP_ALIVE_MIN_INTERVAL
 import kittoku.mvc.teminal.TCP_SOFTETHER_HEADER_SIZE
 import kittoku.mvc.teminal.UDPStatus
-import kittoku.mvc.teminal.UDP_KEEP_ALIVE_INTERVAL_DIFF
-import kittoku.mvc.teminal.UDP_KEEP_ALIVE_MIN_INTERVAL
-import kittoku.mvc.teminal.UDP_NATT_INTERVAL_DIFF
-import kittoku.mvc.teminal.UDP_NATT_INTERVAL_INITIAL
-import kittoku.mvc.teminal.UDP_NATT_INTERVAL_MIN
-import kittoku.mvc.teminal.UDP_NATT_PORT
 import kittoku.mvc.unit.ETHERNET_HEADER_SIZE
 import kittoku.mvc.unit.ETHERNET_MAX_MTU
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.net.DatagramPacket
 import java.nio.ByteBuffer
 import kotlin.math.max
 
@@ -32,13 +21,9 @@ internal class OutgoingManager(internal val bridge: SharedBridge) {
     private val bufferSize = max(bridge.socket.session.applicationBufferSize, TCP_SOFTETHER_HEADER_SIZE + ETHERNET_MAX_MTU)
     internal val mainBuffer = ByteBuffer.allocate(bufferSize)
     private val prefs = PreferenceManager.getDefaultSharedPreferences(bridge.service)
-    private var observer: NetworkObserver? = null
 
     private var jobMain: Job? = null
     private var jobRetrieve: Job? = null
-    private var jobTCPKeepAlive: Job? = null
-    private var jobUDPKeepAlive: Job? = null
-    private var jobUDPInquireNATT: Job? = null
 
     private val retrieveChannel = Channel<ByteBuffer>(0)
 
@@ -105,59 +90,8 @@ internal class OutgoingManager(internal val bridge: SharedBridge) {
         }
     }
 
-    internal fun launchJobTCPKeepAlive() {
-        jobTCPKeepAlive = bridge.scope.launch(bridge.handler) {
-            while (isActive) {
-                sendTCPKeepAlive()
-
-                (TCP_KEEP_ALIVE_MIN_INTERVAL + bridge.random.nextInt(TCP_KEEP_ALIVE_INTERVAL_DIFF)).toLong().also {
-                    delay(it)
-                }
-            }
-        }
-    }
-
-    internal fun launchJobUDPKeepAlive() {
-        jobUDPKeepAlive = bridge.scope.launch(bridge.handler) {
-            val buffer = ByteBuffer.allocate(0)
-
-            while (isActive) {
-                bridge.udpTerminal!!.sendData(buffer)
-
-                (UDP_KEEP_ALIVE_MIN_INTERVAL + bridge.random.nextInt(UDP_KEEP_ALIVE_INTERVAL_DIFF)).toLong().also {
-                    delay(it)
-                }
-            }
-        }
-    }
-
-    internal fun launchJobInquireNATT() {
-        jobUDPInquireNATT = bridge.scope.launch(bridge.handler) {
-            val packet = DatagramPacket(
-                "B".toByteArray(Charsets.US_ASCII),
-                1, bridge.udpAccelerationConfig!!.nattAddress, UDP_NATT_PORT
-            )
-
-            while (isActive) {
-                bridge.udpTerminal!!.sendPacket(packet)
-
-                val interval = if (bridge.udpAccelerationConfig!!.status == UDPStatus.OPEN) {
-                    UDP_NATT_INTERVAL_MIN + bridge.random.nextInt(UDP_NATT_INTERVAL_DIFF)
-                } else {
-                    UDP_NATT_INTERVAL_INITIAL
-                }
-
-                delay(interval.toLong())
-            }
-        }
-    }
-
     internal fun cancel() {
-        observer?.close()
         jobMain?.cancel()
         jobRetrieve?.cancel()
-        jobTCPKeepAlive?.cancel()
-        jobUDPKeepAlive?.cancel()
-        jobUDPInquireNATT?.cancel()
     }
 }
